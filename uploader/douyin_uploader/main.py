@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
+import time
 from datetime import datetime
 
+import loguru
 from playwright.async_api import Playwright, async_playwright, Page
 import os
 import asyncio
 
 from conf import LOCAL_CHROME_PATH
 from utils.base_social_media import set_init_script
+from utils.file_util import get_account_file
 from utils.log import douyin_logger
 
 
@@ -45,6 +48,21 @@ async def douyin_setup(account_file, handle=False):
     return True
 
 
+async def get_user_id(page):
+    start_time = time.time()  # 获取开始时间
+    while True:
+        user_id = await page.locator('.eYQd8').text_content()
+        user_id = user_id.replace("抖音号：", "").strip()
+        if user_id == '0':
+            current_time = time.time()  # 获取当前时间
+            elapsed_time = current_time - start_time  # 计算已经过去的时间
+            if elapsed_time > 10:  # 如果已经过去的时间超过5秒
+                break  # 退出循环
+        else:
+            break  # 退出循环
+    return user_id
+
+
 async def douyin_cookie_gen(account_file):
     async with async_playwright() as playwright:
         options = {
@@ -58,9 +76,23 @@ async def douyin_cookie_gen(account_file):
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://creator.douyin.com/")
-        await page.pause()
+        login_url = page.url
+        # await page.pause()
+        start_time = time.time()
+        while True:
+            if login_url == page.url:
+                await asyncio.sleep(0.5)
+            else:
+                break
+            elapsed_time = time.time() - start_time
+            # 检查是否超过了超时时间
+            if elapsed_time > 120:
+                raise TimeoutError("操作超时，跳出循环")
+        user_id = await get_user_id(page)
+        user_name = await page.locator('.rNsML').text_content()
+        loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
-        await context.storage_state(path=account_file)
+        await context.storage_state(path=get_account_file(user_id))
 
 
 class DouYinVideo(object):
