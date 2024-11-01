@@ -7,10 +7,10 @@ from playwright.async_api import Playwright, async_playwright, Page
 import os
 import asyncio
 
-from conf import LOCAL_CHROME_PATH
-from utils.base_social_media import set_init_script
-from utils.file_util import get_account_file
-from utils.log import douyin_logger
+from social_auto_upload.conf import LOCAL_CHROME_PATH
+from social_auto_upload.utils.base_social_media import set_init_script
+from social_auto_upload.utils.file_util import get_account_file
+from social_auto_upload.utils.log import douyin_logger
 
 
 async def cookie_auth(account_file):

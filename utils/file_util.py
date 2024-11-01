@@ -10,7 +10,7 @@ from pathlib import Path
 import loguru
 import requests
 
-from conf import BASE_DIR
+from social_auto_upload.conf import BASE_DIR
 
 
 def download_video(url, output_filename):
