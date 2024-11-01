@@ -5,10 +5,10 @@ from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
-from conf import LOCAL_CHROME_PATH
-from utils.base_social_media import set_init_script
-from utils.files_times import get_absolute_path
-from utils.log import kuaishou_logger
+from social_auto_upload.conf import LOCAL_CHROME_PATH
+from social_auto_upload.utils.base_social_media import set_init_script
+from social_auto_upload.utils.files_times import get_absolute_path
+from social_auto_upload.utils.log import kuaishou_logger
 
 
 async def cookie_auth(account_file):

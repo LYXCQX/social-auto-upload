@@ -4,15 +4,15 @@ from datetime import datetime
 from os.path import exists
 from pathlib import Path
 
-from conf import BASE_DIR
+from social_auto_upload.conf import BASE_DIR
 from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
 from uploader.ks_uploader.main import ks_setup, KSVideo
 from uploader.tencent_uploader.main import weixin_setup, TencentVideo
 from uploader.tk_uploader.main_chrome import tiktok_setup, TiktokVideo
-from utils.base_social_media import get_supported_social_media, get_cli_action, SOCIAL_MEDIA_DOUYIN, \
+from social_auto_upload.utils.base_social_media import get_supported_social_media, get_cli_action, SOCIAL_MEDIA_DOUYIN, \
     SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU
-from utils.constant import TencentZoneTypes
-from utils.files_times import get_title_and_hashtags
+from social_auto_upload.utils.constant import TencentZoneTypes
+from social_auto_upload.utils.files_times import get_title_and_hashtags
 
 
 def parse_schedule(schedule_raw):

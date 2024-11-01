@@ -3,7 +3,7 @@ import pathlib
 import random
 from biliup.plugins.bili_webup import BiliBili, Data
 
-from utils.log import bilibili_logger
+from social_auto_upload.utils.log import bilibili_logger
 
 
 def extract_keys_from_json(data):

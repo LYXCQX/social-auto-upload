@@ -5,10 +5,10 @@ from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
-from conf import LOCAL_CHROME_PATH
-from utils.base_social_media import set_init_script
-from utils.files_times import get_absolute_path
-from utils.log import tencent_logger
+from social_auto_upload.conf import LOCAL_CHROME_PATH
+from social_auto_upload.utils.base_social_media import set_init_script
+from social_auto_upload.utils.files_times import get_absolute_path
+from social_auto_upload.utils.log import tencent_logger
 
 
 def format_str_for_short_title(origin_title: str) -> str:

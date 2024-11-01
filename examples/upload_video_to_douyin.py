@@ -1,9 +1,9 @@
 import asyncio
 from pathlib import Path
 
-from conf import BASE_DIR
+from social_auto_upload.conf import BASE_DIR
 from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
-from utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
+from social_auto_upload.utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
 
 
 if __name__ == '__main__':
