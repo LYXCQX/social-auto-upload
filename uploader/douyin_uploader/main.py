@@ -126,14 +126,22 @@ class DouYinVideo(object):
         douyin_logger.info('视频出错了，重新上传中')
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> None:
+    async def upload(self, playwright: Playwright) -> bool:
         # 使用 Chromium 浏览器启动一个浏览器实例
         if self.local_executable_path:
-            browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
+            browser = await playwright.chromium.launch(
+                headless=False,
+                executable_path=self.local_executable_path,
+                args=['--start-maximized']  # 添加启动参数以最大化窗口
+            )
         else:
-            browser = await playwright.chromium.launch(headless=False)
+            browser = await playwright.chromium.launch(
+                headless=False,
+                args=['--start-maximized']  # 添加启动参数以最大化窗口
+            )
+
         # 创建一个浏览器上下文，使用指定的 cookie 文件
-        context = await browser.new_context(storage_state=f"{self.account_file}")
+        context = await browser.new_context(storage_state=f"{self.account_file}", no_viewport=True)
         context = await set_init_script(context)
 
         # 创建一个新的页面
@@ -144,6 +152,19 @@ class DouYinVideo(object):
         # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
         douyin_logger.info(f'[-] 正在打开主页...')
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
+
+        # 检查提示文字是否存在
+        while True:
+            text_exists = await page.get_by_text("支持常用视频格式，推荐mp4、webm").is_visible()
+            if text_exists:
+                douyin_logger.info("检测到上传页面已加载,正在刷新...")
+                await page.reload()
+                while True:
+                    text_exists = await page.get_by_text("支持常用视频格式，推荐mp4、webm").is_visible()
+                    if text_exists:
+                        break
+                break
+
         # 点击 "上传视频" 按钮
         await page.locator("div[class^='container'] input").set_input_files(self.file_path)
 
@@ -238,7 +259,8 @@ class DouYinVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
-    
+        return True
+
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
             await page.click('text="选择封面"')
@@ -262,6 +284,4 @@ class DouYinVideo(object):
 
     async def main(self):
         async with async_playwright() as playwright:
-            await self.upload(playwright)
-
-
+            return await self.upload(playwright)
