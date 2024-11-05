@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import time
 from datetime import datetime
+from typing import Tuple, Any
 
 import loguru
 from playwright.async_api import Playwright, async_playwright, Page
@@ -126,7 +127,7 @@ class DouYinVideo(object):
         douyin_logger.info('视频出错了，重新上传中')
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> bool:
+    async def upload(self, playwright: Playwright) -> tuple[bool, Any] | tuple[bool, str]:
         # 使用 Chromium 浏览器启动一个浏览器实例
         if self.local_executable_path:
             browser = await playwright.chromium.launch(
@@ -149,7 +150,7 @@ class DouYinVideo(object):
         # 访问指定的 URL
         await page.goto("https://creator.douyin.com/creator-micro/content/upload")
         douyin_logger.info(f'[+]正在上传-------{self.title}.mp4')
-        # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
+        # 等待页面跳转到指定的 URL，��进入，则自动等待到超时
         douyin_logger.info(f'[-] 正在打开主页...')
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
 
@@ -184,7 +185,8 @@ class DouYinVideo(object):
         # 这里为了避免页面变化，故使用相对位置定位：作品标题父级右侧第一个元素的input子元素
         await asyncio.sleep(1)
         douyin_logger.info(f'  [-] 正在填充标题和话题...')
-        title_container = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator("input")
+        title_container = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator(
+            "input")
         if await title_container.count():
             await title_container.fill(self.title[:30])
         else:
@@ -216,11 +218,14 @@ class DouYinVideo(object):
                     if await page.locator('div.progress-div > div:has-text("上传失败")').count():
                         douyin_logger.error("  [-] 发现上传出错了... 准备重试")
                         await self.handle_upload_error(page)
-            except:
+            except Exception as e:
+                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                    raise e  # 直接抛出异常
+                douyin_logger.error(e)
                 douyin_logger.info("  [-] 正在上传视频中...")
                 await asyncio.sleep(2)
-        
-        #上传视频封面
+
+        # 上传视频封面
         await self.set_thumbnail(page, self.thumbnail_path)
 
         # 更换可见元素
@@ -236,13 +241,50 @@ class DouYinVideo(object):
 
         if self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
-
+        msg_res = '检测通过，暂未发现异常'
         # 判断视频是否发布成功
         while True:
             # 判断视频是否发布成功
             try:
                 publish_button = page.get_by_role('button', name="发布", exact=True)
                 if await publish_button.count():
+                    start_time = time.time()
+                    while True:
+                        try:
+                            # 获取视频检测状态
+                            if await page.locator(
+                                    'section.contentWrapper-j5kIqC:has-text("检测通过，暂未发现异常")').count() > 0 or \
+                                    await page.locator('section.contentWrapper-j5kIqC:has-text("你近期发布过的作品中，出现了多次涉及非原创及无创作的素材引用的内容，建议在发布前检查有无同类型问题")').count() > 0 :
+                                douyin_logger.success("  [-] 视频检测通过")
+                                break
+                            elif await page.locator(
+                                    'section.contentWrapper-j5kIqC:has-text("抱歉，小助手会记录这个异常，持续优化检测能力")').count() > 0 or \
+                                    await page.locator('section.contentWrapper-j5kIqC:has-text("发布后会进入人工审核，建议您自查提升通过概率")').count() > 0:
+                                content = await page.locator('section.contentWrapper-j5kIqC').text_content()
+                                douyin_logger.error(f"  [-] 视频检测失败: {content}")
+                                return False, content
+                            elif await page.locator('p.progressingContent-QEbwRE:has-text("视频检测中")').count() > 0:
+                                douyin_logger.info("  [-] 视频检测中...")
+                                await asyncio.sleep(2)
+                            # 检查检测时间是否超过5分钟
+                            current_time = time.time()
+                            elapsed_time = current_time - start_time
+                            if elapsed_time > 300:
+                                page_content = await page.content()
+                                douyin_logger.info(f"页面内容: {page_content}")
+                                msg_res = '五分钟也没有检测结果，直接返回'
+                                break
+                        except:
+                            # 检查检测时间是否超过5分钟
+                            current_time = time.time()
+                            elapsed_time = current_time - start_time
+                            if elapsed_time > 300:
+                                page_content = await page.content()
+                                douyin_logger.info(f"页面内容: {page_content}")
+                                msg_res = '五分钟也没有检测结果，直接返回'
+                                break
+                            douyin_logger.info("  [-] 视频检测中...")
+                            await asyncio.sleep(2)
                     await publish_button.click()
                 await page.wait_for_url("https://creator.douyin.com/creator-micro/content/manage**",
                                         timeout=3000)  # 如果自动跳转到作品页面，则代表发布成功
@@ -259,7 +301,7 @@ class DouYinVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
-        return True
+        return True, msg_res
 
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
@@ -267,7 +309,8 @@ class DouYinVideo(object):
             await page.wait_for_selector("div.semi-modal-content:visible")
             await page.click('text="上传封面"')
             # 定位到上传区域并点击
-            await page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path)
+            await page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(
+                thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
             await page.locator("div[class^='uploadCrop'] button:has-text('完成')").click()
 
