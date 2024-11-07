@@ -7,11 +7,17 @@ import loguru
 from playwright.async_api import Playwright, async_playwright, Page
 import os
 import asyncio
+from dotenv import load_dotenv
+import json
 
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
+
+# 从环境变量中获取检测失败的内容列表
+failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
+failure_messages = json.loads(failure_messages_json)
 
 
 async def cookie_auth(account_file):
@@ -150,7 +156,7 @@ class DouYinVideo(object):
         # 访问指定的 URL
         await page.goto("https://creator.douyin.com/creator-micro/content/upload")
         douyin_logger.info(f'[+]正在上传-------{self.title}.mp4')
-        # 等待页面跳转到指定的 URL，��进入，则自动等待到超时
+        # 等待页面跳转到指定的 URL，进入，则自动等待到超时
         douyin_logger.info(f'[-] 正在打开主页...')
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
 
@@ -251,21 +257,21 @@ class DouYinVideo(object):
                     start_time = time.time()
                     while True:
                         try:
-                            # 获取视频检测状态
-                            if await page.locator(
-                                    'section.contentWrapper-j5kIqC:has-text("检测通过，暂未发现异常")').count() > 0 or \
-                                    await page.locator('section.contentWrapper-j5kIqC:has-text("你近期发布过的作品中，出现了多次涉及非原创及无创作的素材引用的内容，建议在发布前检查有无同类型问题")').count() > 0 :
-                                douyin_logger.success("  [-] 视频检测通过")
-                                break
-                            elif await page.locator(
-                                    'section.contentWrapper-j5kIqC:has-text("抱歉，小助手会记录这个异常，持续优化检测能力")').count() > 0 or \
-                                    await page.locator('section.contentWrapper-j5kIqC:has-text("发布后会进入人工审核，建议您自查提升通过概率")').count() > 0:
-                                content = await page.locator('section.contentWrapper-j5kIqC').text_content()
-                                douyin_logger.error(f"  [-] 视频检测失败: {content}")
-                                return False, content
-                            elif await page.locator('p.progressingContent-QEbwRE:has-text("视频检测中")').count() > 0:
+                            if await page.locator('p.progressingContent-QEbwRE:has-text("视频检测中")').count() > 0:
                                 douyin_logger.info("  [-] 视频检测中...")
                                 await asyncio.sleep(2)
+                            # 获取视频检测状态
+                            elif await page.locator('section.contentWrapper-j5kIqC').count() > 0:
+                                msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
+                                print(f'-----------------------------{failure_messages}')
+                                print(f'-----------------------------{msg_res}')
+                                if msg_res in failure_messages:
+                                    douyin_logger.error(f"  [-] 视频检测失败: {msg_res}")
+                                    return False, msg_res
+                                else:
+                                    douyin_logger.success("  [-] 视频检测通过")
+                                    break
+                            
                             # 检查检测时间是否超过5分钟
                             current_time = time.time()
                             elapsed_time = current_time - start_time
