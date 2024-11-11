@@ -68,12 +68,13 @@ class BilibiliUploader(object):
             bili.access_token = self.cookie_data.get('access_token')
             video_part = bili.upload_file(str(self.file), lines=self.lines,
                                           tasks=self.upload_thread_num)  # 上传视频，默认线路AUTO自动选择，线程数量3。
+            msg_res = '检测通过，暂未发现异常'
             video_part['title'] = self.title
             self.data.append(video_part)
             ret = bili.submit()  # 提交视频
             if ret.get('code') == 0:
                 bilibili_logger.success(f'[+] {self.file.name}上传 成功')
-                return True
+                return True, msg_res
             else:
                 bilibili_logger.error(f'[-] {self.file.name}上传 失败, error messge: {ret.get("message")}')
-                return False
+                return False, ret.get("message")

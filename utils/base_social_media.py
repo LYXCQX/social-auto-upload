@@ -8,6 +8,7 @@ SOCIAL_MEDIA_TENCENT = "tencent"
 SOCIAL_MEDIA_TIKTOK = "tiktok"
 SOCIAL_MEDIA_BILIBILI = "bilibili"
 SOCIAL_MEDIA_KUAISHOU = "kuaishou"
+SOCIAL_MEDIA_XHS = "xhs"
 
 
 def get_supported_social_media() -> List[str]:

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import re
 from datetime import datetime
+from typing import Tuple
 
 from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
 from social_auto_upload.conf import LOCAL_CHROME_PATH
-from uploader.tk_uploader.tk_config import Tk_Locator
+from social_auto_upload.uploader.tk_uploader.tk_config import Tk_Locator
 from social_auto_upload.utils.base_social_media import set_init_script
 from social_auto_upload.utils.files_times import get_absolute_path
 from social_auto_upload.utils.log import tiktok_logger
@@ -149,12 +150,12 @@ class TiktokVideo(object):
         file_chooser = await fc_info.value
         await file_chooser.set_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> None:
+    async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context)
         page = await context.new_page()
-
+        msg_res = '检测通过，暂未发现异常'
         # change language to eng first
         await self.change_language(page)
         await page.goto("https://www.tiktok.com/tiktokstudio/upload")
@@ -197,6 +198,7 @@ class TiktokVideo(object):
         # close all
         await context.close()
         await browser.close()
+        return True, msg_res
 
     async def add_title_tags(self, page):
 
@@ -301,4 +303,4 @@ class TiktokVideo(object):
 
     async def main(self):
         async with async_playwright() as playwright:
-            await self.upload(playwright)
+            return await self.upload(playwright)

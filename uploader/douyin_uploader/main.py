@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import json
 
 from social_auto_upload.conf import LOCAL_CHROME_PATH
-from social_auto_upload.utils.base_social_media import set_init_script
+from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_DOUYIN
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
 
@@ -99,7 +99,7 @@ async def douyin_cookie_gen(account_file):
         user_name = await page.locator('.rNsML').text_content()
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id))
+        await context.storage_state(path=get_account_file(user_id,SOCIAL_MEDIA_DOUYIN))
 
 
 class DouYinVideo(object):
@@ -208,7 +208,9 @@ class DouYinVideo(object):
             await page.type(css_selector, "#" + tag)
             await page.press(css_selector, "Space")
         douyin_logger.info(f'总共添加{len(self.tags)}个话题')
-
+        allow_download = page.locator('.download-content-Lci5tL label:has-text("不允许")')
+        if await allow_download.count() > 0:
+            await allow_download.click()
         while True:
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
             try:
@@ -263,8 +265,6 @@ class DouYinVideo(object):
                             # 获取视频检测状态
                             elif await page.locator('section.contentWrapper-j5kIqC').count() > 0:
                                 msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
-                                print(f'-----------------------------{failure_messages}')
-                                print(f'-----------------------------{msg_res}')
                                 if msg_res in failure_messages:
                                     douyin_logger.error(f"  [-] 视频检测失败: {msg_res}")
                                     return False, msg_res
@@ -313,12 +313,12 @@ class DouYinVideo(object):
         if thumbnail_path:
             await page.click('text="选择封面"')
             await page.wait_for_selector("div.semi-modal-content:visible")
-            await page.click('text="上传封面"')
+            # await page.click('text="上传封面"', force=True)
             # 定位到上传区域并点击
-            await page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(
-                thumbnail_path)
+            # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
+            await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
-            await page.locator("div[class^='uploadCrop'] button:has-text('完成')").click()
+            await page.locator("div[class^='buttons-qkb9rI'] button:has-text('完成')").click()
 
     async def set_location(self, page: Page, location: str = "杭州市"):
         # todo supoort location later

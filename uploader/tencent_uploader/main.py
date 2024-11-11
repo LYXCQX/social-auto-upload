@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
+import time
 from datetime import datetime
+from typing import Tuple
 
+import loguru
 from playwright.async_api import Playwright, async_playwright
 import os
 import asyncio
 
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script
+from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.files_times import get_absolute_path
 from social_auto_upload.utils.log import tencent_logger
 
@@ -65,9 +69,41 @@ async def get_tencent_cookie(account_file):
         context = await set_init_script(context)
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com")
-        await page.pause()
+        # await page.pause()
+        # # 点击调试器的继续，保存cookie
+        # await context.storage_state(path=account_file)
+        login_url = page.url
+        start_time = time.time()
+        while True:
+            if login_url == page.url:
+                await asyncio.sleep(0.5)
+            else:
+                break
+            elapsed_time = time.time() - start_time
+            # 检查是否超过了超时时间
+            if elapsed_time > 120:
+                raise TimeoutError("操作超时，跳出循环")
+        user_id = await get_user_id(page)
+        user_name = await page.locator('.finder-nickname').text_content()
+        loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
-        await context.storage_state(path=account_file)
+        await context.storage_state(path=get_account_file(user_id, 'tencent'))
+
+
+async def get_user_id(page):
+    start_time = time.time()  # 获取开始时间
+    while True:
+        # 更新选择器以获取视频号ID
+        user_id = await page.locator('.finder-uniq-id').text_content()
+        user_id = user_id.strip()
+        if user_id == '0':
+            current_time = time.time()  # 获取当前时间
+            elapsed_time = current_time - start_time  # 计算已经过去的时间
+            if elapsed_time > 10:  # 如果已经过去的时间超过10秒
+                break  # 退出循环
+        else:
+            break  # 退出循环
+    return user_id
 
 
 async def weixin_setup(account_file, handle=False):
@@ -133,13 +169,13 @@ class TencentVideo(object):
         file_input = page.locator('input[type="file"]')
         await file_input.set_input_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> None:
+    async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context)
-
+        msg_res = '检测通过，暂未发现异常'
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -173,6 +209,7 @@ class TencentVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
+        return True, msg_res
 
     async def add_short_title(self, page):
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
@@ -218,7 +255,9 @@ class TencentVideo(object):
                             'div.media-status-content div.tag-inner:has-text("删除")').count():
                         tencent_logger.error("  [-] 发现上传出错了...准备重试")
                         await self.handle_upload_error(page)
-            except:
+            except Exception as e:
+                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                    raise e  # 直接抛出异常
                 tencent_logger.info("  [-] 正在上传视频中...")
                 await asyncio.sleep(2)
 
@@ -264,4 +303,4 @@ class TencentVideo(object):
 
     async def main(self):
         async with async_playwright() as playwright:
-            await self.upload(playwright)
+            return await self.upload(playwright)

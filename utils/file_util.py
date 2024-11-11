@@ -182,9 +182,9 @@ def calculate_video_md5(file_path):
     return md5.hexdigest()
 
 
-def get_account_file(user_id):
+def get_account_file(user_id,platform):
     user_ck_path = "{}_account.json".format(user_id)
-    account_file = Path(BASE_DIR / "cookies" / "douyin_uploader" / user_ck_path)
+    account_file = Path(BASE_DIR / "cookies" / f"{platform}_uploader" / user_ck_path)
     return account_file
 
 def create_missing_dirs(folder_path):

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
+from typing import Tuple
 
 from playwright.async_api import Playwright, async_playwright
 import os
@@ -75,7 +76,7 @@ class KSVideo(object):
         kuaishou_logger.error("视频出错了，重新上传中")
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> None:
+    async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         # 使用 Chromium 浏览器启动一个浏览器实例
         print(self.local_executable_path)
         if self.local_executable_path:
@@ -90,7 +91,7 @@ class KSVideo(object):
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context)
         context.on("close", lambda: context.storage_state(path=self.account_file))
-
+        msg_res = '检测通过，暂未发现异常'
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -193,10 +194,11 @@ class KSVideo(object):
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
+        return True, msg_res
 
     async def main(self):
         async with async_playwright() as playwright:
-            await self.upload(playwright)
+            return await self.upload(playwright)
 
     async def set_schedule_time(self, page, publish_date):
         kuaishou_logger.info("click schedule")
