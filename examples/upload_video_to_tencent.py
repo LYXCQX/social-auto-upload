@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 
 from social_auto_upload.conf import BASE_DIR
-from uploader.tencent_uploader.main import weixin_setup, TencentVideo
+from social_auto_upload.uploader.tencent_uploader.main import weixin_setup, TencentVideo
 from social_auto_upload.utils.constant import TencentZoneTypes
 from social_auto_upload.utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
 
