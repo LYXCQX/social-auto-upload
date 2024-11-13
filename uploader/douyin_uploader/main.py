@@ -215,7 +215,7 @@ class DouYinVideo(object):
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
             try:
                 #  新版：定位重新上传
-                number = await page.locator('[class^="upload-btn"] div:has-text("重新上传")').count()
+                number = await page.locator('[class^="long-card"] div:has-text("重新上传")').count()
                 if number > 0:
                     douyin_logger.success("  [-]视频上传完毕")
                     break
@@ -271,7 +271,7 @@ class DouYinVideo(object):
                                 else:
                                     douyin_logger.success("  [-] 视频检测通过")
                                     break
-                            
+
                             # 检查检测时间是否超过5分钟
                             current_time = time.time()
                             elapsed_time = current_time - start_time
@@ -313,12 +313,16 @@ class DouYinVideo(object):
         if thumbnail_path:
             await page.click('text="选择封面"')
             await page.wait_for_selector("div.semi-modal-content:visible")
-            # await page.click('text="上传封面"', force=True)
+            await page.click('text="设置竖封面"')
+            await page.wait_for_timeout(2000)  # 等待2秒
             # 定位到上传区域并点击
             # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
             await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
-            await page.locator("div[class^='buttons-qkb9rI'] button:has-text('完成')").click()
+            finish_confirm_element = page.locator("div[class^='confirmBtn'] >> div:has-text('完成')")
+            if await finish_confirm_element.count():
+                await finish_confirm_element.click()
+            await page.locator("div[class^='footer'] button:has-text('完成')").click()
 
     async def set_location(self, page: Page, location: str = "杭州市"):
         # todo supoort location later
