@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Tuple
 
-from playwright.async_api import Playwright, async_playwright
+from playwright.async_api import Playwright, async_playwright, Page
 import os
 import asyncio
 
@@ -63,11 +63,12 @@ async def get_ks_cookie(account_file):
 
 
 class KSVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file,author_service_msg=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
+        self.author_service_msg = author_service_msg
         self.account_file = account_file
         self.date_format = '%Y-%m-%d %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
@@ -136,7 +137,12 @@ class KSVideo(object):
             kuaishou_logger.info("正在添加第%s个话题" % index)
             await page.keyboard.type(f"#{tag} ")
             await asyncio.sleep(2)
-
+        # 点击不允许下载
+        allow_download = page.locator('label:has-text("允许下载此作品")')
+        if await allow_download.count() > 0:
+            await allow_download.click()
+        # 关联商品    
+        await self.set_author_service(page,'关联商品')
         max_retries = 60  # 设置最大重试次数,最大等待时间为 2 分钟
         retry_count = 0
 
@@ -214,3 +220,20 @@ class KSVideo(object):
         await page.keyboard.type(str(publish_date_hour))
         await page.keyboard.press("Enter")
         await asyncio.sleep(1)
+    # 作者服务
+    async def set_author_service(self, page: Page, location: str = "关联商品"):
+        await page.locator('div.ant-select-dropdown span:has-text("选择服务类型")').click()
+        await page.wait_for_selector('#microSupport .ant-select-item-option', timeout=5000)
+        await page.locator(f'#microSupport .ant-select-item-option:has-text("{location}")').click()
+        if self.author_service_msg:
+            selector = 'div.ant-select-selector span:has-text("关联商品获得更多收入")'
+            parent_locator = page.locator(selector).parent()
+            search_locator = parent_locator.locator('.ant-select-selection-search')
+            
+            await page.wait_for_selector(selector, timeout=5000)
+            await page.wait_for_selector('.ant-select-selection-search', timeout=5000)
+            
+            await search_locator.type(self.author_service_msg)
+            await page.wait_for_selector('.rc-virtual-list', state='visible', timeout=5000)
+            await page.keyboard.press("Enter")
+        
