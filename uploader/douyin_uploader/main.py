@@ -14,7 +14,7 @@ from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_DOUYIN
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
-
+load_dotenv()
 # 从环境变量中获取检测失败的内容列表
 failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
 failure_messages = json.loads(failure_messages_json)
@@ -237,7 +237,7 @@ class DouYinVideo(object):
         await self.set_thumbnail(page, self.thumbnail_path)
 
         # 更换可见元素
-        await self.set_location(page, "杭州市")
+        # await self.set_location(page, "杭州市")
 
         # 頭條/西瓜
         third_part_element = '[class^="info"] > [class^="first-part"] div div.semi-switch'
@@ -319,10 +319,14 @@ class DouYinVideo(object):
             # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
             await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
-            finish_confirm_element = page.locator("div[class^='confirmBtn'] >> div:has-text('完成')")
-            if await finish_confirm_element.count():
-                await finish_confirm_element.click()
-            await page.locator("div[class^='footer'] button:has-text('完成')").click()
+            # finish_confirm_element = page.locator("div[class^='confirmBtn'] >> div:has-text('完成')")
+            # if await finish_confirm_element.count():
+            #     await finish_confirm_element.click()
+            thum_count = page.locator("div[class^='uploadCrop'] button:has-text('完成')")
+            if await thum_count.count() > 0:
+                await thum_count.click()
+            else:
+                await page.locator("div[class^='main-4lcA5k'] button:has-text('完成')").click()
 
     async def set_location(self, page: Page, location: str = "杭州市"):
         # todo supoort location later
