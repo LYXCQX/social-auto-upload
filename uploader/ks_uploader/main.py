@@ -32,7 +32,7 @@ async def cookie_auth(account_file):
 
 
 async def ks_setup(account_file, handle=False):
-    account_file = get_absolute_path(account_file, "ks_uploader")
+    account_file = get_absolute_path(account_file, "kuaishou_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             return False
@@ -63,12 +63,12 @@ async def get_ks_cookie(account_file):
 
 
 class KSVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file,author_service_msg=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, goods=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
-        self.author_service_msg = author_service_msg
+        self.goods = goods
         self.account_file = account_file
         self.date_format = '%Y-%m-%d %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
@@ -97,7 +97,7 @@ class KSVideo(object):
         page = await context.new_page()
         # 访问指定的 URL
         await page.goto("https://cp.kuaishou.com/article/publish/video")
-        kuaishou_logger.info('正在上传-------{}.mp4'.format(self.title))
+        kuaishou_logger.info(f'正在上传-------{self.title}.mp4{self.file_path}')
         # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
         kuaishou_logger.info('正在打开主页...')
         await page.wait_for_url("https://cp.kuaishou.com/article/publish/video")
@@ -141,9 +141,10 @@ class KSVideo(object):
         allow_download = page.locator('label:has-text("允许下载此作品")')
         if await allow_download.count() > 0:
             await allow_download.click()
-        # 关联商品    
-        await self.set_author_service(page,'关联商品')
-        max_retries = 60  # 设置最大重试次数,最大等待时间为 2 分钟
+        # 关联商品
+        if self.goods and self.goods.relItemId:
+            await self.set_author_service(page,'关联商品')
+        max_retries = 600  # 设置最大重试次数,最大等待时间为 2 分钟
         retry_count = 0
 
         while retry_count < max_retries:
@@ -159,6 +160,8 @@ class KSVideo(object):
                         kuaishou_logger.info("正在上传视频中...")
                     await asyncio.sleep(2)
             except Exception as e:
+                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                    raise e  # 直接抛出异常
                 kuaishou_logger.error(f"检查上传状态时发生错误: {e}")
                 await asyncio.sleep(2)  # 等待 2 秒后重试
             retry_count += 1
@@ -222,18 +225,29 @@ class KSVideo(object):
         await asyncio.sleep(1)
     # 作者服务
     async def set_author_service(self, page: Page, location: str = "关联商品"):
-        await page.locator('div.ant-select-dropdown span:has-text("选择服务类型")').click()
+        await page.locator('div.ant-select-selector span:has-text("选择服务类型")').locator("..").click()
         await page.wait_for_selector('#microSupport .ant-select-item-option', timeout=5000)
         await page.locator(f'#microSupport .ant-select-item-option:has-text("{location}")').click()
-        if self.author_service_msg:
-            selector = 'div.ant-select-selector span:has-text("关联商品获得更多收入")'
-            parent_locator = page.locator(selector).parent()
-            search_locator = parent_locator.locator('.ant-select-selection-search')
-            
-            await page.wait_for_selector(selector, timeout=5000)
-            await page.wait_for_selector('.ant-select-selection-search', timeout=5000)
-            
-            await search_locator.type(self.author_service_msg)
-            await page.wait_for_selector('.rc-virtual-list', state='visible', timeout=5000)
-            await page.keyboard.press("Enter")
+        product_selector = 'div.ant-select-selector span:has-text("关联商品获得更多收入")'
+        search_input = page.locator(product_selector).locator("..").locator('.ant-select-selection-search-input')
+        await search_input.type(str(self.goods.relItemId))
+        await page.wait_for_selector('.rc-virtual-list', state='visible', timeout=5000)
+        
+        # 获取所有商品标题元素
+        goods_titles = await page.locator('.rc-virtual-list [class^="_goods-title"]').all()
+        
+        # 遍历所有标题，找到匹配的商品并点击
+        for title_element in goods_titles:
+            title_text = await title_element.text_content()
+            if title_text.strip() == str(self.goods.itemTitle).strip():
+                await title_element.click()
+                return
+        await asyncio.sleep(2)
+        for title_element in goods_titles:
+            title_text = await title_element.text_content()
+            if title_text.strip() == str(self.goods.itemTitle).strip():
+                await title_element.click()
+                return  
+        # 如果没有找到匹配的商品，按回车选择第一个
+        await page.keyboard.press("Enter")
         

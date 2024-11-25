@@ -234,7 +234,7 @@ class DouYinVideo(object):
                 await asyncio.sleep(2)
 
         # 上传视频封面
-        await self.set_thumbnail(page, self.thumbnail_path)
+        # await self.set_thumbnail(page, self.thumbnail_path)
 
         # 更换可见元素
         # await self.set_location(page, "杭州市")

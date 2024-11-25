@@ -2,13 +2,13 @@ import asyncio
 from pathlib import Path
 
 from social_auto_upload.conf import BASE_DIR
-from uploader.ks_uploader.main import ks_setup, KSVideo
+from social_auto_upload.uploader.ks_uploader.main import ks_setup, KSVideo
 from social_auto_upload.utils.files_times import generate_schedule_time_next_day, get_title_and_hashtags
 
 
 if __name__ == '__main__':
     filepath = Path(BASE_DIR) / "videos"
-    account_file = Path(BASE_DIR / "cookies" / "ks_uploader" / "account.json")
+    account_file = Path(BASE_DIR / "cookies" / "kuaishou_uploader" / "account.json")
     # 获取视频目录
     folder_path = Path(filepath)
     # 获取文件夹中的所有文件
