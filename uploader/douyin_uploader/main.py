@@ -58,7 +58,7 @@ async def douyin_setup(account_file, handle=False):
 async def get_user_id(page):
     start_time = time.time()  # 获取开始时间
     while True:
-        user_id = await page.locator('.eYQd8').text_content()
+        user_id = await page.locator('[class^="unique_id-"]').text_content()
         user_id = user_id.replace("抖音号：", "").strip()
         if user_id == '0':
             current_time = time.time()  # 获取当前时间
@@ -96,7 +96,7 @@ async def douyin_cookie_gen(account_file):
             if elapsed_time > 120:
                 raise TimeoutError("操作超时，跳出循环")
         user_id = await get_user_id(page)
-        user_name = await page.locator('.rNsML').text_content()
+        user_name = await page.locator('.name-rNsMLq').text_content()
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=get_account_file(user_id,SOCIAL_MEDIA_DOUYIN))
