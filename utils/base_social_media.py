@@ -11,8 +11,14 @@ SOCIAL_MEDIA_KUAISHOU = "kuaishou"
 SOCIAL_MEDIA_XHS = "xhs"
 SOCIAL_MEDIA_JD = "jd"
 
+
 def get_supported_social_media() -> List[str]:
     return [SOCIAL_MEDIA_DOUYIN, SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU]
+
+
+def get_platforms() -> List[str]:
+    return [SOCIAL_MEDIA_DOUYIN, SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_BILIBILI,
+            SOCIAL_MEDIA_KUAISHOU, SOCIAL_MEDIA_XHS, SOCIAL_MEDIA_JD]
 
 
 def get_cli_action() -> List[str]:
