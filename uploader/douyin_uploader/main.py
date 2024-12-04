@@ -319,14 +319,18 @@ class DouYinVideo(object):
             # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
             await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
+            await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
             # finish_confirm_element = page.locator("div[class^='confirmBtn'] >> div:has-text('完成')")
             # if await finish_confirm_element.count():
             #     await finish_confirm_element.click()
-            thum_count = page.locator("div[class^='uploadCrop'] button:has-text('完成')")
-            if await thum_count.count() > 0:
-                await thum_count.click()
-            else:
-                await page.locator("div[class^='main-4lcA5k'] button:has-text('完成')").click()
+            # await page.locator("div[class^='footer'] button:has-text('完成')").click()
+
+
+            # thum_count = page.locator("div[class^='uploadCrop'] button:has-text('完成')")
+            # if await thum_count.count() > 0:
+            #     await thum_count.click()
+            # else:
+            #     await page.locator("div[class^='main-4lcA5k'] button:has-text('完成')").click()
 
     async def set_location(self, page: Page, location: str = "杭州市"):
         # todo supoort location later
