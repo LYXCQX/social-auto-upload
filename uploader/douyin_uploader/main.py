@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import time
 from datetime import datetime
 from typing import Tuple, Any
@@ -14,6 +15,7 @@ from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_DOUYIN
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
+
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
 failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
@@ -58,7 +60,7 @@ async def douyin_setup(account_file, handle=False):
 async def get_user_id(page):
     start_time = time.time()  # 获取开始时间
     while True:
-        user_id = await page.locator('[class^="unique_id-"]').text_content()
+        user_id = await page.locator('[class^="unique_id-"]:has-text("抖音号：")').text_content()
         user_id = user_id.replace("抖音号：", "").strip()
         if user_id == '0':
             current_time = time.time()  # 获取当前时间
@@ -99,11 +101,35 @@ async def douyin_cookie_gen(account_file):
         user_name = await page.locator('.name-rNsMLq').text_content()
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id,SOCIAL_MEDIA_DOUYIN))
+        await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_DOUYIN))
+        response_data = None
+        async def handle_route(route):
+            nonlocal response_data
+            url = route.request.url
+            if "web/general/search/single" in url:  # 更精确的URL匹配
+                # 获取请求头中的cookie
+                headers = route.request.headers
+                response_data = headers.get('cookie', '')
+                loguru.logger.info(f"获取到cookie: {response_data}")  # 添加日志
+            await route.continue_()
+
+        # 使用更精确的路由匹配规则
+        await page.route("**/*", handle_route)
+        await page.goto("https://www.douyin.com/search/%E5%90%B4%E7%8E%89%E8%8A%B3")
+        # 等待获取cookie数据
+        start_time = time.time()
+        while response_data is None:
+            await asyncio.sleep(0.5)
+            if time.time() - start_time > 30:  # 设置30秒超时
+                loguru.logger.error("获取cookie超时")
+                break
+        await context.close()
+        await browser.close()
+        return user_id, user_name, response_data
 
 
 class DouYinVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None,goods=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -112,6 +138,7 @@ class DouYinVideo(object):
         self.date_format = '%Y年%m月%d日 %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
         self.thumbnail_path = thumbnail_path
+        self.goods = goods
 
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -211,6 +238,9 @@ class DouYinVideo(object):
         allow_download = page.locator('.download-content-Lci5tL label:has-text("不允许")')
         if await allow_download.count() > 0:
             await allow_download.click()
+        # 添加商品
+        await self.add_goods(page)
+
         while True:
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
             try:
@@ -309,6 +339,15 @@ class DouYinVideo(object):
         await browser.close()
         return True, msg_res
 
+    async def add_goods(self, page):
+        if self.goods:
+            await page.click('text="位置"')
+            await page.click('text="购物车"')
+            await page.locator('input[placeholder="粘贴商品链接"]').fill(self.goods.itemLinkUrl)
+            await page.click('text="添加链接"')
+            await page.locator('input[placeholder="请输入商品短标题"]').fill(self.goods.itemTitle)
+            await page.click('text="完成编辑"')
+
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
             await page.click('text="选择封面"')
@@ -324,7 +363,6 @@ class DouYinVideo(object):
             # if await finish_confirm_element.count():
             #     await finish_confirm_element.click()
             # await page.locator("div[class^='footer'] button:has-text('完成')").click()
-
 
             # thum_count = page.locator("div[class^='uploadCrop'] button:has-text('完成')")
             # if await thum_count.count() > 0:

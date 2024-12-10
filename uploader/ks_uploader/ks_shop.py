@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import base64
+import logging
 import time
 from datetime import datetime
 from typing import Tuple
@@ -34,11 +35,12 @@ async def cookie_auth(account_file):
             kuaishou_logger.success("[+] cookie 有效")
             return True
 
+
 async def get_user_id(page):
     start_time = time.time()  # 获取开始时间
     while True:
-        user_id = await page.locator('.info-top-number').text_content()
-        user_id = user_id.replace("快手号：", "").strip()
+        user_id = await page.locator(".kpro-workbench-layout-avatar__id").text_content()
+        user_id = user_id.replace("ID:", "").strip()
         if user_id == '0':
             current_time = time.time()  # 获取当前时间
             elapsed_time = current_time - start_time  # 计算已经过去的时间
@@ -47,43 +49,42 @@ async def get_user_id(page):
         else:
             break  # 退出循环
     return user_id
+
+
 async def ks_setup(account_file, handle=False):
     account_file = get_absolute_path(account_file, "kuaishou_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             return False
         kuaishou_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        await get_ks_cookie(account_file)
+        await get_ks_shop_cookie(account_file)
     return True
 
 
-async def get_ks_cookie(account_file):
+async def get_ks_shop_cookie():
     async with async_playwright() as playwright:
         options = {
             'args': [
-                '--lang en-GB'
+                '--lang en-GB',
+                '--start-maximized'
             ],
+
             'headless': False,  # Set headless option here
+            'executable_path':LOCAL_CHROME_PATH
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
+        context = await browser.new_context(no_viewport=True)  # Pass any options
         context = await set_init_script(context)
         # Pause the page, and start recording manually.
         page = await context.new_page()
-        await page.goto("https://cp.kuaishou.com")
-        await page.locator('.login').click()
-        await page.locator('.platform-switch').click()
+        await page.goto("https://login.kwaixiaodian.com/?biz=zone&redirect_url=https%3A%2F%2Fs.kwaixiaodian.com%2Fzone%2Fhome")
         login_url = page.url
-        img_url = await page.locator('.qrcode img').get_attribute('src')
-        # 解码 base64 图片
-        # img_data = base64.b64decode(img_url.replace('data:image/png;base64,', ''))
-        # img = Image.open(BytesIO(img_data))
-        # img.save(get_upload_login_path('kuaishou'))
         start_time = time.time()
         while True:
             if login_url == page.url:
+                logging.info('登录中。。。')
                 await asyncio.sleep(0.5)
             else:
                 break
@@ -91,18 +92,36 @@ async def get_ks_cookie(account_file):
             # 检查是否超过了超时时间
             if elapsed_time > 60:
                 raise TimeoutError("操作超时，跳出循环")
-        await page.goto('https://cp.kuaishou.com/profile')
+
+        response_data = None
+        async def handle_response(response):
+            nonlocal response_data  # 使用nonlocal访问外部变量
+            if "match/selection/home/query/item/list" in response.url:
+                try:
+                    # 获取请求信息
+                    request = response.request
+                    # 获取请求头中的cookie
+                    cookies = request.headers.get('cookie', '')
+                    response_data = cookies
+                except Exception as e:
+                    logging.exception("响应解析失败", e)
+
+        page.on("response", handle_response)
+        await page.goto("https://cps.kwaixiaodian.com/pc/promoter/selection-center/home")
         await asyncio.sleep(0.5)
         user_id = await get_user_id(page)
-        user_name = await page.locator('.info-top-name').text_content()
-        loguru.logger.info(f'{user_id}---{user_name}')
-        # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id,SOCIAL_MEDIA_KUAISHOU))
-        # try:
-        #     os.remove(get_upload_login_path('kuaishou'))
-        # except:
-        #     loguru.logger.info(f"删除图片失败")
-        return user_id, user_name
+        loguru.logger.info(f'{user_id}')
+        
+        # 等待获取cookie数据
+        start_time = time.time()
+        while response_data is None:
+            await asyncio.sleep(0.5)
+            if time.time() - start_time > 30:  # 设置30秒超时
+                loguru.logger.error("获取cookie超时")
+                break
+                
+        page.remove_listener("response", handle_response)
+        return user_id, response_data
 
 
 class KSVideo(object):
@@ -186,7 +205,7 @@ class KSVideo(object):
             await allow_download.click()
         # 关联商品
         if self.goods and self.goods.relItemId:
-            await self.set_author_service(page,'关联商品')
+            await self.set_author_service(page, '关联商品')
         max_retries = 600  # 设置最大重试次数,最大等待时间为 2 分钟
         retry_count = 0
 
@@ -266,6 +285,7 @@ class KSVideo(object):
         await page.keyboard.type(str(publish_date_hour))
         await page.keyboard.press("Enter")
         await asyncio.sleep(1)
+
     # 作者服务
     async def set_author_service(self, page: Page, location: str = "关联商品"):
         await page.locator('div.ant-select-selector span:has-text("选择服务类型")').locator("..").click()
@@ -275,10 +295,10 @@ class KSVideo(object):
         search_input = page.locator(product_selector).locator("..").locator('.ant-select-selection-search-input')
         await search_input.type(str(self.goods.relItemId))
         await page.wait_for_selector('.rc-virtual-list', state='visible', timeout=5000)
-        
+
         # 获取所有商品标题元素
         goods_titles = await page.locator('.rc-virtual-list [class^="_goods-title"]').all()
-        
+
         # 遍历所有标题，找到匹配的商品并点击
         for title_element in goods_titles:
             title_text = await title_element.text_content()
@@ -290,7 +310,6 @@ class KSVideo(object):
             title_text = await title_element.text_content()
             if title_text.strip() == str(self.goods.itemTitle).strip():
                 await title_element.click()
-                return  
-        # 如果没有找到匹配的商品，按回车选择第一个
+                return
+                # 如果没有找到匹配的商品，按回车选择第一个
         await page.keyboard.press("Enter")
-        
