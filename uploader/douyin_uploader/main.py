@@ -293,7 +293,7 @@ class DouYinVideo(object):
                                 douyin_logger.info("  [-] 视频检测中...")
                                 await asyncio.sleep(2)
                             # 获取视频检测状态
-                            elif await page.locator('section.contentWrapper-j5kIqC').count() > 0:
+                            elif await page.locator('section.contentWrapper-j5kIqC').count() > 0 or await page.locator('tips-WfKfmi').count() > 0:
                                 msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
                                 if msg_res in failure_messages:
                                     douyin_logger.error(f"  [-] 视频检测失败: {msg_res}")
