@@ -98,7 +98,7 @@ async def douyin_cookie_gen(account_file):
             if elapsed_time > 120:
                 raise TimeoutError("操作超时，跳出循环")
         user_id = await get_user_id(page)
-        user_name = await page.locator('.name-rNsMLq').text_content()
+        user_name = await page.locator('[class^="header-"] [class^="name-"]').text_content()
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_DOUYIN))
@@ -293,7 +293,7 @@ class DouYinVideo(object):
                                 douyin_logger.info("  [-] 视频检测中...")
                                 await asyncio.sleep(2)
                             # 获取视频检测状态
-                            elif await page.locator('section.contentWrapper-j5kIqC').count() > 0 or await page.locator('tips-WfKfmi').count() > 0:
+                            elif await page.locator('section.contentWrapper-j5kIqC').count() > 0 or await page.locator('.tips-WfKfmi').count() > 0:
                                 msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
                                 if msg_res in failure_messages:
                                     douyin_logger.error(f"  [-] 视频检测失败: {msg_res}")
