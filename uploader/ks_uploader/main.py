@@ -97,7 +97,7 @@ async def get_ks_cookie(account_file):
         user_name = await page.locator('.info-top-name').text_content()
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id,SOCIAL_MEDIA_KUAISHOU))
+        await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_KUAISHOU, user_name))
         # try:
         #     os.remove(get_upload_login_path('kuaishou'))
         # except:

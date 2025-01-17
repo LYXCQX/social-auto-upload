@@ -9,7 +9,7 @@ import os
 import asyncio
 
 from social_auto_upload.conf import LOCAL_CHROME_PATH
-from social_auto_upload.utils.base_social_media import set_init_script
+from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TENCENT
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.files_times import get_absolute_path
 from social_auto_upload.utils.log import tencent_logger
@@ -87,7 +87,7 @@ async def get_tencent_cookie(account_file):
         user_name = await page.locator('.finder-nickname').text_content()
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id, 'tencent'))
+        await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
 
 
 async def get_user_id(page):

@@ -182,8 +182,21 @@ def calculate_video_md5(file_path):
     return md5.hexdigest()
 
 
-def get_account_file(user_id,platform):
-    user_ck_path = "{}_account.json".format(user_id)
+def get_account_file(user_id, platform, user_name=None):
+    if user_name:
+        user_ck_path = "{}_{}_account.json".format(user_id, user_name)
+    else:
+        # 获取cookies/platform_uploader目录下所有以user_id开头的json文件
+        cookie_dir = Path(BASE_DIR / "cookies" / f"{platform}_uploader")
+        json_files = list(cookie_dir.glob(f"{user_id}_*_account.json"))
+        
+        if not json_files:
+            loguru.logger.error(f"未找到用户ID为 {user_id} 的账号文件")
+            return None
+            
+        # 使用找到的第一个匹配文件
+        user_ck_path = json_files[0].name
+
     account_file = Path(BASE_DIR / "cookies" / f"{platform}_uploader" / user_ck_path)
     return account_file
 
