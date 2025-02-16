@@ -14,28 +14,34 @@ def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
 
 def get_title_and_hashtags(filename):
     """
-  获取视频标题和 hashtag
+    获取视频标题和 hashtag
 
-  Args:
-    filename: 视频文件名
+    Args:
+        filename: 视频文件名
 
-  Returns:
-    视频标题和 hashtag 列表
-  """
-
+    Returns:
+        视频标题和 hashtag 列表。如果没有标签，返回空列表
+    """
     # 获取视频标题和 hashtag txt 文件名
     txt_filename = filename.replace(".mp4", ".txt")
 
     # 读取 txt 文件
-    with open(txt_filename, "r", encoding="utf-8") as f:
-        content = f.read()
+    try:
+        with open(txt_filename, "r", encoding="utf-8") as f:
+            content = f.read().strip()
 
-    # 获取标题和 hashtag
-    splite_str = content.strip().split("\n")
-    title = splite_str[0]
-    hashtags = splite_str[1].replace("#", "").split(" ")
+        # 获取标题和 hashtag
+        splite_str = content.split("\n")
+        title = splite_str[0] if splite_str else ""
+        
+        # 如果有第二行，则处理标签，否则返回空列表
+        hashtags = []
+        if len(splite_str) > 1:
+            hashtags = [tag.strip() for tag in splite_str[1].replace("#", "").split(" ") if tag.strip()]
 
-    return title, hashtags
+        return title, hashtags
+    except FileNotFoundError:
+        return "", []
 
 
 def generate_schedule_time_next_day(total_videos, videos_per_day, daily_times=None, timestamps=False, start_days=0):
