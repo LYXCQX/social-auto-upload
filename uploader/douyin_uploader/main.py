@@ -51,10 +51,15 @@ async def douyin_setup(account_file, handle=False):
     if not os.path.exists(account_file) or not await cookie_auth(account_file):
         if not handle:
             # Todo alert message
-            return False
+            return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        await douyin_cookie_gen(account_file)
-    return True
+        user_id, user_name, response_data = await douyin_cookie_gen(account_file)
+    else:
+        # 新增：从 account_file 的文件名中提取用户 id 和 name
+        base_name = os.path.basename(account_file)
+        user_id, user_name = base_name.split('_')[:2]  # 假设文件名格式为 "user_id_user_name_account.json"
+
+    return True, user_id, user_name, None
 
 
 async def get_user_id(page):
@@ -103,6 +108,7 @@ async def douyin_cookie_gen(account_file):
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_DOUYIN, user_name))
         response_data = None
+
         async def handle_route(route):
             nonlocal response_data
             url = route.request.url
@@ -128,8 +134,25 @@ async def douyin_cookie_gen(account_file):
         return user_id, user_name, response_data
 
 
+# 添加自定义异常类
+class UpdateError(Exception):
+    """任务未找到异常"""
+
+    def __init__(self, message=None):
+        self.message = message or "没有找到任务标签，可能还没接取该任务，请先接取任务"
+        super().__init__(self.message)
+
+class BusError(Exception):
+    """任务未找到异常"""
+
+    def __init__(self, message=None):
+        self.message = message or "业务异常，"
+        super().__init__(self.message)
+
+
 class DouYinVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None,check_video=False,info=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None,
+                 check_video=False, info=None, collection=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -141,6 +164,8 @@ class DouYinVideo(object):
         self.goods = goods
         self.check_video = check_video
         self.info = info
+        self.collection = collection
+
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
         label_element = page.locator("[class^='radio']:has-text('定时发布')")
@@ -186,23 +211,20 @@ class DouYinVideo(object):
             playlet_title = anchor_info.get("title", None)
             playlet_title_tag = anchor_info.get("title_tag", None)
             if playlet_title:
-                await self.check_have_task(page, playlet_title, playlet_title_tag)
-                # 检查当前页面URL
-                current_url = page.url
-                if not current_url.startswith("https://creator.douyin.com/creator-micro/content/upload"):
+                have_task, page = await self.check_have_task(page, playlet_title, playlet_title_tag)
+                print(page.url)
+                if not have_task:
                     douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
-                    await self.new_task(page, playlet_title, playlet_title_tag)
+                    page = await self.new_task(page, playlet_title, playlet_title_tag)
                 else:
                     douyin_logger.info('[+] 已经存在任务，继续处理')
-
         else:
             # 访问指定的 URL
             await page.goto("https://creator.douyin.com/creator-micro/content/upload")
         douyin_logger.info(f'[+]正在上传-------{self.title}.mp4')
         # 等待页面跳转到指定的 URL，进入，则自动等待到超时
         douyin_logger.info(f'[-] 正在打开主页...')
-        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload")
-
+        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload*")
         # 检查提示文字是否存在
         while True:
             text_exists = await page.get_by_text("支持常用视频格式，推荐mp4、webm").is_visible()
@@ -223,14 +245,14 @@ class DouYinVideo(object):
             try:
                 # 尝试等待第一个 URL
                 await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/publish?enter_from=publish_page", timeout=3)
+                    "https://creator.douyin.com/creator-micro/content/publish*", timeout=3)
                 douyin_logger.info("[+] 成功进入version_1发布页面!")
                 break  # 成功进入页面后跳出循环
             except Exception:
                 try:
                     # 如果第一个 URL 超时，再尝试等待第二个 URL
                     await page.wait_for_url(
-                        "https://creator.douyin.com/creator-micro/content/post/video?enter_from=publish_page",
+                        "https://creator.douyin.com/creator-micro/content/post/video*",
                         timeout=3)
                     douyin_logger.info("[+] 成功进入version_2发布页面!")
 
@@ -239,33 +261,13 @@ class DouYinVideo(object):
                     print("  [-] 超时未进入视频发布页面，重新尝试...")
                     await asyncio.sleep(0.5)  # 等待 0.5 秒后重新尝试
         # 填充标题和话题
-        # 检查是否存在包含输入框的元素
-        # 这里为了避免页面变化，故使用相对位置定位：作品标题父级右侧第一个元素的input子元素
-        await asyncio.sleep(1)
-        douyin_logger.info(f'  [-] 正在填充标题和话题...')
-        title_container = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator(
-            "input")
-        if await title_container.count():
-            await title_container.fill(self.title[:30])
-        else:
-            titlecontainer = page.locator(".notranslate")
-            await titlecontainer.click()
-            await page.keyboard.press("Backspace")
-            await page.keyboard.press("Control+KeyA")
-            await page.keyboard.press("Delete")
-            await page.keyboard.type(self.title)
-            await page.keyboard.press("Enter")
-        css_selector = ".zone-container"
-        for index, tag in enumerate(self.tags, start=1):
-            await page.type(css_selector, "#" + tag)
-            await page.press(css_selector, "Space")
-        douyin_logger.info(f'总共添加{len(self.tags)}个话题')
+        await self.fill_title_and_tags(page)
         allow_download = page.locator('.download-content-Lci5tL label:has-text("不允许")')
         if await allow_download.count() > 0:
             await allow_download.click()
         # 添加商品
         await self.add_goods(page)
-
+        await self.set_collection(page)
         while True:
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
             try:
@@ -302,7 +304,7 @@ class DouYinVideo(object):
             if 'semi-switch-checked' not in await page.eval_on_selector(third_part_element, 'div => div.className'):
                 await page.locator(third_part_element).locator('input.semi-switch-native-control').click()
 
-        if self.publish_date != 0:
+        if self.publish_date and self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
         msg_res = '检测通过，暂未发现异常'
         # 判断视频是否发布成功
@@ -322,7 +324,9 @@ class DouYinVideo(object):
                                 if (await page.locator('div:has-text("作品未见异常")').count() > 0 or
                                         await page.locator('div:has-text("仅支持检测5分钟以内的视频")').count() > 0):
                                     break
-                                elif await page.locator('section.contentWrapper-j5kIqC').count() > 0 or await page.locator('div.detectItemTitle-X5pTL9').count() > 0:
+                                elif await page.locator(
+                                        'section.contentWrapper-j5kIqC').count() > 0 or await page.locator(
+                                    'div.detectItemTitle-X5pTL9').count() > 0:
                                     j5kIqC = await page.query_selector('section.contentWrapper-j5kIqC')
                                     if j5kIqC:
                                         msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
@@ -373,60 +377,155 @@ class DouYinVideo(object):
         await browser.close()
         return True, msg_res
 
+    async def click_button_with_timeout(self, page, selector, button_name, parent_dom=None, timeout=30, force_click=False):
+        """带超时的按钮点击
+        Args:
+            page: playwright page对象
+            selector: 按钮选择器
+            button_name: 按钮名称(用于日志)
+            timeout: 超时时间(秒)
+        Returns:
+            bool: 是否点击成功
+            :param force_click:
+            :param timeout:
+            :param button_name:
+            :param page:
+            :param selector:
+            :param parent_dom:
+        """
+        start_time = time.time()
+        while True:
+            try:
+                if parent_dom:
+                    button = parent_dom.locator(selector)
+                else:
+                    button = page.locator(selector)
+                if await button.count() > 0:
+                    if force_click:
+                        button.evaluate('el => el.click()')
+                    else:
+                        await button.click()
+                    douyin_logger.info(f'[+] 点击了{button_name}按钮')
+                    return True
+
+                if time.time() - start_time > timeout:
+                    douyin_logger.error(f'[!] 等待{button_name}按钮超时')
+                    return False
+
+                await asyncio.sleep(1)
+
+            except Exception as e:
+                douyin_logger.error(f'[!] 点击{button_name}按钮失败: {str(e)}')
+                return False
+
+    async def wait_for_clickable(self, page, selector, timeout=30):
+        """等待元素可点击
+        Args:
+            page: playwright page对象
+            selector: 元素选择器
+            timeout: 超时时间(秒)
+        Returns:
+            element: 可点击的元素，如果超时返回None
+        """
+        start_time = time.time()
+        while True:
+            try:
+                element = page.locator(selector)
+                if await element.count() > 0:
+                    # 检查元素是否可见且可点击
+                    is_visible = await element.is_visible()
+
+                    if is_visible:
+                        return element
+
+                if time.time() - start_time > timeout:
+                    douyin_logger.error(f'[!] 等待元素可点击超时: {selector}')
+                    return None
+
+                await asyncio.sleep(0.5)
+
+            except Exception as e:
+                douyin_logger.error(f'[!] 等待元素可点击出错: {str(e)}')
+                return None
+
     async def new_task(self, page, playlet_title, playlet_title_tag):
         await page.goto("https://creator.douyin.com/creator-micro/revenue/market")
+        await page.wait_for_selector('.wrapper-hAV6HZ, .wrapper-DizYsD', state='visible', timeout=10000)  # 等待最多 10 秒
         # 找到搜索框并输入任务名称
         search_input = page.locator('input[placeholder="请输入任务名称/任务ID"]')
         await search_input.fill(playlet_title)
         await page.keyboard.press('Enter')
         await page.wait_for_timeout(2000)  # 等待搜索结果加载
-        await self.click_playlet_video(page, playlet_title_tag)
+        await self.click_playlet_video(page, playlet_title_tag, new_task=True)
+        page = await page.wait_for_event('popup')
+        await page.wait_for_selector('span:text("我要投稿")', state='visible', timeout=10000)  # 等待按钮可见
         await self.get_title_tag(page)
+        print('开始投稿了')
+
         # 点击"我要投稿"按钮
-        submit_button = page.locator('span:has-text("我要投稿")')
-        if await submit_button.count() > 0:
-            await submit_button.click()
-            douyin_logger.info('[+] 点击了我要投稿按钮')
+        start_time = time.time()
+        while True:
+            submit_button = page.locator('span:text("我要投稿")')
+            if await submit_button.count() > 0:
+                await submit_button.click()
+                await page.wait_for_timeout(1000)
+                confirm_box = page.locator('.el-message-box__btns')
+                if await confirm_box.count() > 0:
+                    break
+            if time.time() - start_time > 10:
+                douyin_logger.error(f'[!] 等待元素可点击超时:我要投稿')
+                raise BusError(f"未找到投稿按钮，下次再试")
 
-            # 等待并处理确认弹窗
-            confirm_box = page.locator('.el-message-box__btns')
-            if await confirm_box.count() > 0:
-                confirm_button = confirm_box.locator('span:has-text("确定")')
-                if await confirm_button.count() > 0:
-                    await confirm_button.click()
-                    douyin_logger.info('[+] 点击了确认弹窗的确定按钮')
+        # 等待并处理确认弹窗
+        if await confirm_box.count() > 0:
+            await self.click_button_with_timeout(page, 'span:text("确定")', "确定", confirm_box)
+            douyin_logger.info('[+] 点击了确认弹窗的确定按钮')
 
-                    # 点击"上传视频"按钮
-                    upload_button = page.locator('span:has-text("上传视频")')
-                    if await upload_button.count() > 0:
-                        await upload_button.click()
-                        douyin_logger.info('[+] 点击了上传视频按钮')
+            async with page.expect_popup() as popup_info:
+                await self.click_button_with_timeout(page, selector='span:has-text("上传视频")', button_name="上传视频",force_click=True)
+            douyin_logger.info('[+] 点击了上传视频按钮')
+            page = await popup_info.value
+            return page
+        else:
+            # 检查是否存在 el-dialog__body 元素
+            dialog_body = page.locator('.el-dialog__body')
+            # 等待 el-dialog__body 元素出现
+            if await dialog_body.count() > 0:  # 检查元素是否存在
+                # 获取并打印内容
+                dialog_content = await dialog_body.evaluate('el => el.textContent')
+                raise UpdateError(f"暂不满足参与条件：{dialog_content}")
 
     async def check_have_task(self, page, playlet_title, playlet_title_tag):
         await page.goto("https://creator.douyin.com/creator-micro/revenue/tasks")
         # 点击"进行中"标签
-        in_progress_tab = page.locator('a:has-text("进行中")')
-        if await in_progress_tab.count() > 0:
-            await in_progress_tab.click()
-            douyin_logger.info('[+] 点击了进行中标签')
-            await page.wait_for_timeout(1000)  # 等待页面加载
-            # 点击"客户"标签
-            client_tab = page.locator('span:has-text("客户")')
-            await client_tab.click()
-            douyin_logger.info('[+] 点击了客户标签')
-            await page.wait_for_timeout(1000)  # 等待页面加载
-            # 点击"任务名称"标签
-            task_name_tab = page.locator('span:has-text("任务名称")')
-            await task_name_tab.click()
-            douyin_logger.info('[+] 点击了任务名称标签')
-            await page.wait_for_timeout(1000)  # 等待页面加载
-            # 在进行中页面输入任务名称
-            task_search = page.locator('input[placeholder="请输入任务名称"]')
-            await task_search.fill(playlet_title)
-            await page.keyboard.press('Enter')
-            douyin_logger.info(f'[+] 在进行中页面搜索任务: {playlet_title}')
-            await page.wait_for_timeout(2000)  # 等待搜索结果加载
-            await self.click_playlet_video(page, playlet_title_tag)
+        await page.wait_for_selector('a:has-text("进行中")', timeout=10000)  # 等待最多 10 秒
+        await page.locator('a:has-text("进行中")').click()
+        douyin_logger.info('[+] 点击了进行中标签')
+        await page.wait_for_timeout(1000)  # 等待页面加载
+        # 点击"客户"标签
+        customer_labels = await page.locator('span:text("客户")').element_handles()  # 获取所有客户标签的元素句柄
+        for label in customer_labels:
+            await label.click()  # 点击每个客户标签
+            douyin_logger.info(f'[+] 点击了客户标签: {await label.text_content()}')  # 打印被点击的客户标签文本
+            await page.wait_for_timeout(1000)
+        # client_tab = page.locator('span:has-text("客户")')
+        # await client_tab.click()
+        # douyin_logger.info('[+] 点击了客户标签')
+        # await page.wait_for_timeout(1000)  # 等待页面加载
+        # 点击"任务名称"标签
+        task_name_tab = page.locator('div:text("任务名称")')
+        await task_name_tab.click()
+        douyin_logger.info('[+] 点击了任务名称标签')
+        await page.wait_for_timeout(1000)  # 等待页面加载
+        # 在进行中页面输入任务名称
+        task_search = page.locator('input[placeholder="请输入任务名称"]')
+        await task_search.fill(playlet_title)
+        await page.keyboard.press('Enter')
+        douyin_logger.info(f'[+] 在进行中页面搜索任务: {playlet_title}')
+        await page.wait_for_timeout(2000)  # 等待搜索结果加载
+        have_task = await self.click_playlet_video(page, playlet_title_tag, new_task=False)
+        if have_task:
+            page = await page.wait_for_event('popup')
             # 点击"查看任务详情"按钮
             detail_button = page.locator('span:has-text("查看任务详情")')
             await detail_button.click()
@@ -436,8 +535,16 @@ class DouYinVideo(object):
             # 点击"上传视频"按钮
             upload_button = page.locator('span:has-text("上传视频")')
             if await upload_button.count() > 0:
-                await upload_button.click()
+                # await upload_button.click(force=True)
+                async with page.expect_popup() as popup_info:
+                    await upload_button.evaluate('el => el.click()')  # 使用 JavaScript 强制点击
                 douyin_logger.info('[+] 点击了上传视频按钮')
+                page = await popup_info.value
+                print(page.url)
+            else:
+                if await page.get_by_text('达人已取消任务').count() > 0:
+                    return False, page
+        return have_task, page
 
     async def get_title_tag(self, page):
         # 等待硬性要求标签出现
@@ -452,8 +559,12 @@ class DouYinVideo(object):
                 # 获取从第一个#到最后的内容作为标题
                 self.title = hard_req_content[hash_index:]
                 douyin_logger.info(f'[+] 从硬性要求中获取到标题: {self.title}')
+            else:
+                douyin_logger.info("没有找到硬性要求标签")
+        else:
+            douyin_logger.info("-没有找到硬性要求标签")
 
-    async def click_playlet_video(self, page, playlet_title_tag):
+    async def click_playlet_video(self, page, playlet_title_tag, new_task=False):
         # 如果有标签,点击对应标签
         if playlet_title_tag:
             tag_element = page.locator(f'text="{playlet_title_tag}"')
@@ -479,6 +590,12 @@ class DouYinVideo(object):
                 # 点击最大百分比对应的标签
                 await percent_elements.nth(max_index).click()
                 douyin_logger.info(f'[+] 选择了最高百分比的标签: {max_percent}%')
+            else:
+                if new_task:
+                    raise UpdateError("没有找到任务标签，可能还没接取该任务，请先接取任务")
+                else:
+                    return False
+        return True
 
     async def add_goods(self, page):
         if self.goods:
@@ -522,6 +639,102 @@ class DouYinVideo(object):
         await page.wait_for_selector('div[role="listbox"] [role="option"]', timeout=5000)
         await page.locator('div[role="listbox"] [role="option"]').first.click()
 
+    async def set_collection(self, page):
+        """设置视频合集"""
+        try:
+            if not self.collection:
+                return
+
+            douyin_logger.info(f'[+] 开始设置合集: {self.collection}')
+
+            # 点击合集选择按钮
+            await page.click('div:text("请选择合集")')
+            # 尝试选择合集
+
+            if await self.click_button_with_timeout(page, f'div[role="option"]:has-text("{self.collection}")',
+                                                    "self.collection"):
+                douyin_logger.info(f'[+] 成功选择合集：{self.collection}')
+                return True
+            else:
+                douyin_logger.warning(f'[!] 未找到合集: {self.collection}')
+
+        except Exception as e:
+            douyin_logger.error(f'[!] 设置合集失败: {str(e)}')
+
+    async def check_upload_status(self, page):
+        """检查视频上传状态"""
+        try:
+            # 检查重新上传按钮
+            reupload_btn = page.locator('[class^="long-card"] div:has-text("重新上传")')
+            if await reupload_btn.count() > 0:
+                douyin_logger.success("[+] 视频上传完毕")
+                return True
+
+            # 检查上传失败状态
+            fail_status = page.locator('div.progress-div > div:has-text("上传失败")')
+            if await fail_status.count() > 0:
+                douyin_logger.error("[!] 发现上传出错，准备重试")
+                await self.handle_upload_error(page)
+                return False
+
+            douyin_logger.info("[-] 正在上传视频中...")
+            return False
+
+        except Exception as e:
+            if "Target page, context or browser has been closed" in str(e):
+                raise e
+            douyin_logger.error(f"[!] 检查上传状态出错: {str(e)}")
+            return False
+
+    async def wait_upload_complete(self, page):
+        """等待视频上传完成"""
+        while True:
+            try:
+                if await self.check_upload_status(page):
+                    break
+                await asyncio.sleep(2)
+            except Exception as e:
+                if "Target page, context or browser has been closed" in str(e):
+                    raise e
+                douyin_logger.error(e)
+                await asyncio.sleep(2)
+
     async def main(self):
         async with async_playwright() as playwright:
             return await self.upload(playwright)
+
+    async def fill_title_and_tags(self, page):
+        """填充标题和话题"""
+        try:
+            douyin_logger.info('[-] 正在填充标题和话题...')
+
+            # 填充标题
+            title_input = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator(
+                "input")
+            if await title_input.count():
+                await title_input.fill(self.title[:30])
+            else:
+                # 备用方案
+                title_input = page.locator(".notranslate")
+                await title_input.click()
+                await page.keyboard.press("Control+A")
+                await page.keyboard.press("Delete")
+                await title_input.type(self.title)
+                await page.keyboard.press("Enter")
+
+            # 填充话题
+            if self.tags:
+                css_selector = ".zone-container"
+                for tag in self.tags:
+                    # 去除前后空格并检查标签是否已经包含#
+                    tag = tag.strip()
+                    if not tag:  # 跳过空标签
+                        continue
+                        
+                    tag_text = tag if tag.startswith('#') else f'#{tag}'
+                    await page.type(css_selector, tag_text)
+                    await page.press(css_selector, "Space")
+                douyin_logger.info(f'[+] 已添加 {len(self.tags)} 个话题')
+
+        except Exception as e:
+            douyin_logger.error(f'[!] 填充标题和话题失败: {str(e)}')
