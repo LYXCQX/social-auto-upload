@@ -22,9 +22,13 @@ failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
 failure_messages = json.loads(failure_messages_json)
 
 
-async def cookie_auth(account_file):
+async def cookie_auth(account_file, thumbnail_path=None):
+    douyin_logger.info(f"cookie_auth 使用浏览器路径: {thumbnail_path}")
+    if not thumbnail_path or not os.path.exists(thumbnail_path):
+        douyin_logger.warning(f"浏览器路径无效: {thumbnail_path}")
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True)
+        browser = await playwright.chromium.launch(headless=True,
+                                                   executable_path=thumbnail_path)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -47,13 +51,13 @@ async def cookie_auth(account_file):
             return True
 
 
-async def douyin_setup(account_file, handle=False):
-    if not os.path.exists(account_file) or not await cookie_auth(account_file):
+async def douyin_setup(account_file, handle=False, thumbnail_path=None):
+    if not os.path.exists(account_file) or not await cookie_auth(account_file,thumbnail_path):
         if not handle:
             # Todo alert message
             return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name, response_data = await douyin_cookie_gen(account_file)
+        user_id, user_name, response_data = await douyin_cookie_gen(account_file,thumbnail_path)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
@@ -77,13 +81,11 @@ async def get_user_id(page):
     return user_id
 
 
-async def douyin_cookie_gen(account_file):
+async def douyin_cookie_gen(account_file,thumbnail_path=None):
     async with async_playwright() as playwright:
-        options = {
-            'headless': False
-        }
         # Make sure to run headed.
-        browser = await playwright.chromium.launch(**options)
+        browser = await playwright.chromium.launch(headless=False,
+                                                   executable_path=thumbnail_path)
         # Setup context however you like.
         context = await browser.new_context()  # Pass any options
         context = await set_init_script(context)

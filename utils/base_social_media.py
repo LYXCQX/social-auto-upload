@@ -1,5 +1,7 @@
 from pathlib import Path
 from typing import List
+import os
+import sys
 
 from social_auto_upload.conf import BASE_DIR
 
@@ -26,6 +28,27 @@ def get_cli_action() -> List[str]:
 
 
 async def set_init_script(context):
-    stealth_js_path = Path(BASE_DIR / "utils/stealth.min.js")
-    await context.add_init_script(path=stealth_js_path)
-    return context
+    """设置初始化脚本"""
+    try:
+        # 获取程序运行目录
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的 exe 运行
+            base_dir = Path(sys.executable).parent
+        else:
+            # 如果是源码运行
+            base_dir = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        
+        # stealth.min.js 的路径
+        stealth_path = base_dir / 'utils' / 'stealth.min.js'
+        
+        if not stealth_path.exists():
+            raise FileNotFoundError(f"找不到文件: {stealth_path}")
+            
+        # 读取并添加初始化脚本
+        with open(stealth_path, 'r', encoding='utf-8') as f:
+            await context.add_init_script(script=f.read())
+            
+        return context
+    except Exception as e:
+        print(f"设置初始化脚本失败: {str(e)}")
+        raise

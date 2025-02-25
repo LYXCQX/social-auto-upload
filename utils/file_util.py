@@ -1,3 +1,4 @@
+import sys
 import hashlib
 import os
 import random
@@ -183,11 +184,20 @@ def calculate_video_md5(file_path):
 
 
 def get_account_file(user_id, platform, user_name=None):
+    """获取账号文件路径"""
+    # 获取程序运行目录
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的 exe 运行
+        base_dir = Path(sys.executable).parent
+    else:
+        # 如果是源码运行
+        base_dir = BASE_DIR
+    
     if user_name:
         user_ck_path = "{}_{}_account.json".format(user_id, user_name)
     else:
         # 获取cookies/platform_uploader目录下所有以user_id开头的json文件
-        cookie_dir = Path(BASE_DIR / "cookies" / f"{platform}_uploader")
+        cookie_dir = Path(base_dir / "cookies" / f"{platform}_uploader")
         json_files = list(cookie_dir.glob(f"{user_id}_*_account.json"))
         
         if not json_files:
@@ -197,10 +207,27 @@ def get_account_file(user_id, platform, user_name=None):
         # 使用找到的第一个匹配文件
         user_ck_path = json_files[0].name
 
-    account_file = Path(BASE_DIR / "cookies" / f"{platform}_uploader" / user_ck_path)
+    account_file = Path(base_dir / "cookies" / f"{platform}_uploader" / user_ck_path)
     return account_file
 
 def create_missing_dirs(folder_path):
+    """创建缺失的目录"""
+    # 获取程序运行目录
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的 exe 运行
+        base_dir = Path(sys.executable).parent
+    else:
+        # 如果是源码运行
+        base_dir = BASE_DIR
+        
+    # 确保目录存在
+    for dir_name in ['cookies', 'logs', 'utils']:
+        dir_path = base_dir / dir_name
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True)
+            loguru.logger.info(f"文件夹 {dir_path} 创建成功")
+            
+    # 创建特定的目录
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
         loguru.logger.info(f"文件夹 {folder_path} 创建成功")
