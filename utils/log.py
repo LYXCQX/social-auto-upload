@@ -67,7 +67,7 @@ except:
 
 # 添加文件日志
 logger.add(
-    log_dir / "app_{time}.log",
+    log_dir / "app_{time:YYYY-MM-DD}.log",
     rotation="500 MB",
     encoding="utf-8",
     format=log_formatter,
