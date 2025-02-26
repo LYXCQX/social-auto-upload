@@ -33,7 +33,15 @@ def log_formatter(record: dict) -> str:
         "ERROR": "#ae2c2c"
     }
     color = colors.get(record["level"].name, "#b3cfe7")
-    return f"<fg #70acde>{{time:YYYY-MM-DD HH:mm:ss}}</fg #70acde> | <fg {color}>{{level}}</fg {color}>: <light-white>{{message}}</light-white>\n"
+    
+    # 基本日志格式
+    log_format = f"<fg #70acde>{{time:YYYY-MM-DD HH:mm:ss}}</fg #70acde> | <fg {color}>{{level}}</fg {color}>: <light-white>{{message}}</light-white>\n"
+    
+    # 如果有异常信息，添加异常部分
+    if record["exception"]:
+        log_format += "<red>{exception}</red>\n"
+        
+    return log_format
 
 
 def create_logger(log_name: str, file_path: str):
@@ -60,7 +68,11 @@ logger.remove()
 # 尝试添加控制台输出，如果失败则跳过
 try:
     if sys.stdout is not None:
-        logger.add(sys.stdout, colorize=True, format=log_formatter)
+        logger.add(sys.stdout, 
+                   colorize=True, 
+                   format=log_formatter,
+                   backtrace=True,
+                   diagnose=True)
 except:
     # 如果无法添加控制台输出，只记录到文件
     pass
@@ -71,7 +83,9 @@ logger.add(
     rotation="500 MB",
     encoding="utf-8",
     format=log_formatter,
-    level="INFO"
+    level="INFO",
+    backtrace=True,
+    diagnose=True
 )
 
 # 定义所有平台的日志记录器

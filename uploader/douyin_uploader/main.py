@@ -23,7 +23,6 @@ failure_messages = json.loads(failure_messages_json)
 
 
 async def cookie_auth(account_file, thumbnail_path=None):
-    douyin_logger.info(f"cookie_auth 使用浏览器路径: {thumbnail_path}")
     if not thumbnail_path or not os.path.exists(thumbnail_path):
         douyin_logger.warning(f"浏览器路径无效: {thumbnail_path}")
     async with async_playwright() as playwright:

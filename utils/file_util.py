@@ -183,8 +183,14 @@ def calculate_video_md5(file_path):
     return md5.hexdigest()
 
 
-def get_account_file(user_id, platform, user_name=None):
-    """获取账号文件路径"""
+def get_account_file(user_id, platform, user_name=None, *suffixes):
+    """获取账号文件路径
+    Args:
+        user_id: 用户ID
+        platform: 平台名称
+        user_name: 用户名称（可选）
+        *suffixes: 可变数量的后缀参数
+    """
     # 获取程序运行目录
     if getattr(sys, 'frozen', False):
         # 如果是打包后的 exe 运行
@@ -193,21 +199,26 @@ def get_account_file(user_id, platform, user_name=None):
         # 如果是源码运行
         base_dir = BASE_DIR
     
+    # 获取cookies/platform_uploader目录下所有以user_id开头的json文件
+    cookie_dir = Path(base_dir / "cookies" / f"{platform}_uploader")
+    
+    # 确保cookie_dir目录存在
+    if not cookie_dir.exists():
+        cookie_dir.mkdir(parents=True)
+        loguru.logger.info(f"文件夹 {cookie_dir} 创建成功")
+    
+    # 构建文件名模式
     if user_name:
-        user_ck_path = "{}_{}_account.json".format(user_id, user_name)
+        name_pattern = f"{user_id}_{user_name}"
     else:
-        # 获取cookies/platform_uploader目录下所有以user_id开头的json文件
-        cookie_dir = Path(base_dir / "cookies" / f"{platform}_uploader")
-        json_files = list(cookie_dir.glob(f"{user_id}_*_account.json"))
-        
-        if not json_files:
-            loguru.logger.error(f"未找到用户ID为 {user_id} 的账号文件")
-            return None
-            
-        # 使用找到的第一个匹配文件
-        user_ck_path = json_files[0].name
-
-    account_file = Path(base_dir / "cookies" / f"{platform}_uploader" / user_ck_path)
+        name_pattern = f"{user_id}"
+    if suffixes:
+        # 将所有后缀用下划线连接
+        suffix_str = '_'.join(suffixes)
+        user_ck_path = f"{name_pattern}_{suffix_str}_account.json"
+    else:
+        user_ck_path = f"{name_pattern}_account.json"
+    account_file = Path(cookie_dir / user_ck_path)
     return account_file
 
 def create_missing_dirs(folder_path):
