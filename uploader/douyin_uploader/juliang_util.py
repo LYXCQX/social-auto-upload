@@ -130,3 +130,44 @@ async def juliang_cookie_gen(account_file, thumbnail_path=None):
         await context.close()
         await browser.close()
         return user_id, user_name, douyin_id
+async def xt_have_task(page, playlet_title):
+    await page.goto("https://www.xingtu.cn/sup/creator/user/task")
+    await page.wait_for_url("https://www.xingtu.cn/sup/creator/user/task*")
+
+    # 检查"知道了"按钮是否存在，如果存在则点击
+    try:
+        know_button = page.locator('button:text("知道了")')
+        if await know_button.count() > 0:
+            await know_button.click()
+    except:
+        pass
+
+    await page.click('text="进行中"')
+    search_input = page.locator('input[placeholder="请输入任务ID/名称"]')
+    await search_input.fill(playlet_title)
+    await page.keyboard.press('Enter')
+    await page.wait_for_timeout(2000)  # 等待搜索结果加载
+
+    # 获取所有可见的"去上传"按钮
+    upload_buttons = page.locator('button:has-text("去上传"):visible')
+    upload_count = await upload_buttons.count()
+    douyin_logger.info(f'[+] 找到 {upload_count} 个可见的去上传按钮')
+
+    have_task = False
+    # 如果找到按钮,点击第一个
+    if upload_count > 0:
+        try:
+            first_button = upload_buttons.first
+            if await first_button.is_visible():
+                async with page.expect_popup() as popup_info:
+                    await first_button.click()
+                page = await popup_info.value
+                douyin_logger.info('[+] 点击了去上传按钮')
+                await page.wait_for_timeout(2000)
+                have_task = True
+            else:
+                douyin_logger.warning('[!] 找到的去上传按钮不可见')
+        except Exception as e:
+            douyin_logger.error(f'[!] 点击去上传按钮失败: {str(e)}')
+
+    return have_task, page

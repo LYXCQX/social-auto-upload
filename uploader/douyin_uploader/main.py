@@ -16,6 +16,8 @@ from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_M
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
 
+from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_have_task
+
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
 failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
@@ -120,17 +122,6 @@ async def douyin_cookie_gen(account_file,thumbnail_path=None):
                 response_data = headers.get('cookie', '')
                 loguru.logger.info(f"获取到cookie: {response_data}")  # 添加日志
             await route.continue_()
-
-        # 使用更精确的路由匹配规则
-        # await page.route("**/*", handle_route)
-        # await page.goto("https://www.douyin.com/search/%E5%90%B4%E7%8E%89%E8%8A%B3")
-        # 等待获取cookie数据
-        start_time = time.time()
-        # while response_data is None:
-        #     await asyncio.sleep(0.5)
-        #     if time.time() - start_time > 30:  # 设置30秒超时
-        #         loguru.logger.error("获取cookie超时")
-        #         break
         await context.close()
         await browser.close()
         return user_id, user_name, response_data
@@ -214,12 +205,13 @@ class DouYinVideo(object):
             if self.info.get('use_xt'):
                 try:
                     # 创建一个浏览器上下文，使用指定的 cookie 文件
-                    have_task, page, n_url = await self.xt_have_task(page, playlet_title)
+                    have_task, page = await xt_have_task(page, playlet_title)
                     if not have_task:
                         douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
                         have_task, page, n_url = await self.new_xt_task(page, playlet_title)
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
+                    have_task, page, n_url = await self.click_go_to_upload(have_task, page)
                 finally:
                     await context.storage_state(path=self.account_file)  # 保存cookie
                     douyin_logger.success('  星图cookie更新完毕！')
@@ -389,49 +381,6 @@ class DouYinVideo(object):
         await context.close()
         await browser.close()
         return True, msg_res
-
-    async def xt_have_task(self, page, playlet_title):
-        await page.goto("https://www.xingtu.cn/sup/creator/user/task")
-        await page.wait_for_url("https://www.xingtu.cn/sup/creator/user/task*")
-        
-        # 检查"知道了"按钮是否存在，如果存在则点击
-        try:
-            know_button = page.locator('button:text("知道了")')
-            if await know_button.count() > 0:
-                await know_button.click()
-        except:
-            pass
-            
-        await page.click('text="进行中"')
-        search_input = page.locator('input[placeholder="请输入任务ID/名称"]')
-        await search_input.fill(playlet_title)
-        await page.keyboard.press('Enter')
-        await page.wait_for_timeout(2000)  # 等待搜索结果加载
-        
-        # 获取所有可见的"去上传"按钮
-        upload_buttons = page.locator('button:has-text("去上传"):visible')
-        upload_count = await upload_buttons.count()
-        douyin_logger.info(f'[+] 找到 {upload_count} 个可见的去上传按钮')
-        
-        have_task = False
-        # 如果找到按钮,点击第一个
-        if upload_count > 0:
-            try:
-                first_button = upload_buttons.first
-                if await first_button.is_visible():
-                    async with page.expect_popup() as popup_info:
-                        await first_button.click()
-                    page = await popup_info.value
-                    douyin_logger.info('[+] 点击了去上传按钮')
-                    await page.wait_for_timeout(2000)
-                    have_task = True
-                else:
-                    douyin_logger.warning('[!] 找到的去上传按钮不可见')
-            except Exception as e:
-                douyin_logger.error(f'[!] 点击去上传按钮失败: {str(e)}')
-                
-        have_task, page, n_url = await self.click_go_to_upload(have_task, page)
-        return have_task, page, n_url
 
     async def new_xt_task(self, page, playlet_title):
         await page.goto("https://www.xingtu.cn/sup/creator/market?type=submission")
@@ -640,10 +589,6 @@ class DouYinVideo(object):
             await label.click()  # 点击每个客户标签
             douyin_logger.info(f'[+] 点击了客户标签: {await label.text_content()}')  # 打印被点击的客户标签文本
             await page.wait_for_timeout(1000)
-        # client_tab = page.locator('span:has-text("客户")')
-        # await client_tab.click()
-        # douyin_logger.info('[+] 点击了客户标签')
-        # await page.wait_for_timeout(1000)  # 等待页面加载
         # 点击"任务名称"标签
         task_name_tab = page.locator('div:text("任务名称")')
         await task_name_tab.click()
@@ -750,17 +695,6 @@ class DouYinVideo(object):
             await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
             await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
-            # finish_confirm_element = page.locator("div[class^='confirmBtn'] >> div:has-text('完成')")
-            # if await finish_confirm_element.count():
-            #     await finish_confirm_element.click()
-            # await page.locator("div[class^='footer'] button:has-text('完成')").click()
-
-            # thum_count = page.locator("div[class^='uploadCrop'] button:has-text('完成')")
-            # if await thum_count.count() > 0:
-            #     await thum_count.click()
-            # else:
-            #     await page.locator("div[class^='main-4lcA5k'] button:has-text('完成')").click()
-
     async def set_location(self, page: Page, location: str = "杭州市"):
         # todo supoort location later
         # await page.get_by_text('添加标签').locator("..").locator("..").locator("xpath=following-sibling::div").locator(
