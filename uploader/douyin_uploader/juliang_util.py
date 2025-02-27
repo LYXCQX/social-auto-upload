@@ -33,6 +33,7 @@ async def cookie_auth(account_file, thumbnail_path=None):
             await context.close()
             await browser.close()
             return False
+        await asyncio.sleep(2)
         # 2024.06.17 抖音创作者中心改版
         if await page.get_by_text('星图资讯').count():
             douyin_logger.info("[+] 等待5秒 cookie 失效")
@@ -52,7 +53,7 @@ async def juliang_setup(account_file, handle=False, thumbnail_path=None):
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
-        user_id, user_name, douyin_id = base_name.split('_')[:3]  # 假设文件名格式为 "user_id_user_name_account.json"
+        user_id, user_name, douyin_id = base_name.split('_')[:2]  # 假设文件名格式为 "user_id_user_name_account.json"
 
     return True, user_id, user_name, douyin_id
 
@@ -94,12 +95,13 @@ async def get_user_id(page):
 
 
 async def juliang_cookie_gen(account_file, thumbnail_path=None):
+    print(account_file)
     async with async_playwright() as playwright:
         # Make sure to run headed.
         browser = await playwright.chromium.launch(headless=False,
                                                    executable_path=thumbnail_path)
         # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
+        context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # Pause the page, and start recording manually.
         page = await context.new_page()
@@ -122,8 +124,9 @@ async def juliang_cookie_gen(account_file, thumbnail_path=None):
         douyin_logger.info(f"获取到用户名: {user_name}")
         
         douyin_logger.info(f'{user_id}---{douyin_id}---{user_name}')
+        douyin_logger.info(f'---------{account_file}')
         # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id, 'juliang', user_name, douyin_id))
+        await context.storage_state(path=account_file)
         await context.close()
         await browser.close()
         return user_id, user_name, douyin_id

@@ -25,6 +25,7 @@ failure_messages = json.loads(failure_messages_json)
 async def cookie_auth(account_file, thumbnail_path=None):
     if not thumbnail_path or not os.path.exists(thumbnail_path):
         douyin_logger.warning(f"浏览器路径无效: {thumbnail_path}")
+    print(account_file)
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True,
                                                    executable_path=thumbnail_path)
@@ -204,21 +205,32 @@ class DouYinVideo(object):
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context)
-
         # 创建一个新的页面
         page = await context.new_page()
         if self.info and self.info.get("anchor_info", None):
             anchor_info = self.info.get("anchor_info", None)
             playlet_title = anchor_info.get("title", None)
             playlet_title_tag = anchor_info.get("title_tag", None)
-            if playlet_title:
-                have_task, page = await self.check_have_task(page, playlet_title, playlet_title_tag)
-                print(page.url)
-                if not have_task:
-                    douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
-                    page = await self.new_task(page, playlet_title, playlet_title_tag)
-                else:
-                    douyin_logger.info('[+] 已经存在任务，继续处理')
+            if self.info.get('use_xt'):
+                try:
+                    # 创建一个浏览器上下文，使用指定的 cookie 文件
+                    have_task, page, n_url = await self.xt_have_task(page, playlet_title)
+                    if not have_task:
+                        douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
+                        have_task, page, n_url = await self.new_xt_task(page, playlet_title)
+                    else:
+                        douyin_logger.info('[+] 已经存在任务，继续处理')
+                finally:
+                    await context.storage_state(path=self.account_file)  # 保存cookie
+                    douyin_logger.success('  星图cookie更新完毕！')
+            else:
+                if playlet_title:
+                    have_task, page, n_url = await self.check_have_task(page, playlet_title, playlet_title_tag)
+                    if not have_task:
+                        douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
+                        page = await self.new_task(page, playlet_title, playlet_title_tag)
+                    else:
+                        douyin_logger.info('[+] 已经存在任务，继续处理')
         else:
             # 访问指定的 URL
             await page.goto("https://creator.douyin.com/creator-micro/content/upload")
@@ -378,6 +390,123 @@ class DouYinVideo(object):
         await browser.close()
         return True, msg_res
 
+    async def xt_have_task(self, page, playlet_title):
+        await page.goto("https://www.xingtu.cn/sup/creator/user/task")
+        await page.wait_for_url("https://www.xingtu.cn/sup/creator/user/task*")
+        
+        # 检查"知道了"按钮是否存在，如果存在则点击
+        try:
+            know_button = page.locator('button:text("知道了")')
+            if await know_button.count() > 0:
+                await know_button.click()
+        except:
+            pass
+            
+        await page.click('text="进行中"')
+        search_input = page.locator('input[placeholder="请输入任务ID/名称"]')
+        await search_input.fill(playlet_title)
+        await page.keyboard.press('Enter')
+        await page.wait_for_timeout(2000)  # 等待搜索结果加载
+        
+        # 获取所有可见的"去上传"按钮
+        upload_buttons = page.locator('button:has-text("去上传"):visible')
+        upload_count = await upload_buttons.count()
+        douyin_logger.info(f'[+] 找到 {upload_count} 个可见的去上传按钮')
+        
+        have_task = False
+        # 如果找到按钮,点击第一个
+        if upload_count > 0:
+            try:
+                first_button = upload_buttons.first
+                if await first_button.is_visible():
+                    async with page.expect_popup() as popup_info:
+                        await first_button.click()
+                    page = await popup_info.value
+                    douyin_logger.info('[+] 点击了去上传按钮')
+                    await page.wait_for_timeout(2000)
+                    have_task = True
+                else:
+                    douyin_logger.warning('[!] 找到的去上传按钮不可见')
+            except Exception as e:
+                douyin_logger.error(f'[!] 点击去上传按钮失败: {str(e)}')
+                
+        have_task, page, n_url = await self.click_go_to_upload(have_task, page)
+        return have_task, page, n_url
+
+    async def new_xt_task(self, page, playlet_title):
+        await page.goto("https://www.xingtu.cn/sup/creator/market?type=submission")
+        await page.wait_for_url("https://www.xingtu.cn/sup/creator/market*")
+        await self.xt_click_plate(page, playlet_title)
+        page = await self.click_tougao(page)
+        return await self.click_go_to_upload(True, page)
+
+
+    async def xt_click_plate(self, page, playlet_title):
+        print(playlet_title)
+        search_input = page.locator('input[placeholder="请输入任务名称/ID"]')
+        await search_input.fill(playlet_title)
+        await page.keyboard.press('Enter')
+        await page.wait_for_timeout(2000)  # 等待搜索结果加载
+        
+        # 查找所有百分比元素
+        percent_elements = page.locator('.content .task-list .author-market-task-card')
+        # 打印每个元素的HTML内容
+        for i in range(await percent_elements.count()):
+            element_html = await percent_elements.nth(i).evaluate('element => element.outerHTML')
+            douyin_logger.info(f"任务卡片 {i + 1} HTML: {element_html}")
+        percent_count = await percent_elements.count()
+        if percent_count > 0:
+            max_card = None
+            max_amount = 0
+            # 遍历所有任务卡片
+            for i in range(percent_count):
+                card = percent_elements.nth(i)
+                douyin_logger.info(f"任务卡片 HTML: {await card.evaluate('element => element.outerHTML')}")
+                try:
+                    # 方式一：累加所有 .rate 的值
+                    rates = card.locator('.rate')
+                    douyin_logger.info(f"任务卡片 HTML: {await rates.evaluate('element => element.outerHTML')}")
+                    total_rate = 0
+                    rate_count = await rates.count()
+                    for j in range(rate_count):
+                        rate_text = await rates.nth(j).text_content()
+                        rate_value = float(rate_text.strip('%'))
+                        total_rate += rate_value
+                        
+                    if total_rate > max_amount:
+                        max_amount = total_rate
+                        max_card = card
+                except:
+                    try:
+                        # 方式二：查找总奖金金额
+                        price_element = card.locator('.price-number')
+                        if await price_element.count() > 0:
+                            price_text = await price_element.text_content()
+                            price_value = float(price_text)
+                            if price_value > max_amount:
+                                max_amount = price_value
+                                max_card = card
+                    except:
+                        continue
+            print(f'最大佣金为{max_amount}')
+            print(max_amount > 0)
+            if max_card:
+                print(f'最大佣金为{max_amount}')
+                # 点击最大金额对应的任务卡片
+                douyin_logger.info(f"任务卡片 HTML: {await max_card.evaluate('element => element.outerHTML')}")
+                await max_card.locator('button:has-text("我要投稿"):visible').click()
+                douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
+                return
+                
+        # 如果上面的方式都没找到，尝试直接查找"我要投稿"按钮
+        # submit_button = page.locator('span:text("我要投稿")')
+        # if await submit_button.count() > 0:
+        #     await submit_button.click()
+        #     douyin_logger.info('[+] 直接点击了"我要投稿"按钮')
+        #     return
+            
+        raise UpdateError("没有找到任务标签，可能还没接取该任务，请先接取任务")
+
     async def click_button_with_timeout(self, page, selector, button_name, parent_dom=None, timeout=30, force_click=False):
         """带超时的按钮点击
         Args:
@@ -403,7 +532,7 @@ class DouYinVideo(object):
                     button = page.locator(selector)
                 if await button.count() > 0:
                     if force_click:
-                        button.evaluate('el => el.click()')
+                        await button.evaluate('el => el.click()')
                     else:
                         await button.click()
                     douyin_logger.info(f'[+] 点击了{button_name}按钮')
@@ -458,11 +587,14 @@ class DouYinVideo(object):
         await page.keyboard.press('Enter')
         await page.wait_for_timeout(2000)  # 等待搜索结果加载
         await self.click_playlet_video(page, playlet_title_tag, new_task=True)
+        return await self.click_tougao(page)
+
+    # 点击投稿
+    async def click_tougao(self, page):
         page = await page.wait_for_event('popup')
         await page.wait_for_selector('span:text("我要投稿")', state='visible', timeout=10000)  # 等待按钮可见
         await self.get_title_tag(page)
         print('开始投稿了')
-
         # 点击"我要投稿"按钮
         start_time = time.time()
         while True:
@@ -476,8 +608,7 @@ class DouYinVideo(object):
             if time.time() - start_time > 10:
                 douyin_logger.error(f'[!] 等待元素可点击超时:我要投稿')
                 raise BusError(f"未找到投稿按钮，下次再试")
-
-        # 等待并处理确认弹窗
+            # 等待并处理确认弹窗
         if await confirm_box.count() > 0:
             await self.click_button_with_timeout(page, 'span:text("确定")', "确定", confirm_box)
             douyin_logger.info('[+] 点击了确认弹窗的确定按钮')
@@ -525,8 +656,10 @@ class DouYinVideo(object):
         douyin_logger.info(f'[+] 在进行中页面搜索任务: {playlet_title}')
         await page.wait_for_timeout(2000)  # 等待搜索结果加载
         have_task = await self.click_playlet_video(page, playlet_title_tag, new_task=False)
+        return await self.click_go_to_upload(have_task, page)
+
+    async def click_go_to_upload(self, have_task, page):
         if have_task:
-            page = await page.wait_for_event('popup')
             # 点击"查看任务详情"按钮
             detail_button = page.locator('span:has-text("查看任务详情")')
             await detail_button.click()
@@ -541,11 +674,10 @@ class DouYinVideo(object):
                     await upload_button.evaluate('el => el.click()')  # 使用 JavaScript 强制点击
                 douyin_logger.info('[+] 点击了上传视频按钮')
                 page = await popup_info.value
-                print(page.url)
             else:
                 if await page.get_by_text('达人已取消任务').count() > 0:
-                    return False, page
-        return have_task, page
+                    return False, page, page.url
+        return have_task, page, page.url
 
     async def get_title_tag(self, page):
         # 等待硬性要求标签出现
