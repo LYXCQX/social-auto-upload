@@ -24,13 +24,13 @@ failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
 failure_messages = json.loads(failure_messages_json)
 
 
-async def cookie_auth(account_file, thumbnail_path=None):
-    if not thumbnail_path or not os.path.exists(thumbnail_path):
-        douyin_logger.warning(f"浏览器路径无效: {thumbnail_path}")
+async def cookie_auth(account_file, local_executable_path=None):
+    if not local_executable_path or not os.path.exists(local_executable_path):
+        douyin_logger.warning(f"浏览器路径无效: {local_executable_path}")
     print(account_file)
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True,
-                                                   executable_path=thumbnail_path)
+                                                   executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -53,13 +53,13 @@ async def cookie_auth(account_file, thumbnail_path=None):
             return True
 
 
-async def douyin_setup(account_file, handle=False, thumbnail_path=None):
-    if not os.path.exists(account_file) or not await cookie_auth(account_file,thumbnail_path):
+async def douyin_setup(account_file, handle=False, local_executable_path=None):
+    if not os.path.exists(account_file) or not await cookie_auth(account_file,local_executable_path):
         if not handle:
             # Todo alert message
             return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name, response_data = await douyin_cookie_gen(account_file,thumbnail_path)
+        user_id, user_name, response_data = await douyin_cookie_gen(account_file,local_executable_path)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
@@ -83,11 +83,11 @@ async def get_user_id(page):
     return user_id
 
 
-async def douyin_cookie_gen(account_file,thumbnail_path=None):
+async def douyin_cookie_gen(account_file,local_executable_path=None):
     async with async_playwright() as playwright:
         # Make sure to run headed.
         browser = await playwright.chromium.launch(headless=False,
-                                                   executable_path=thumbnail_path)
+                                                   executable_path=local_executable_path)
         # Setup context however you like.
         context = await browser.new_context()  # Pass any options
         context = await set_init_script(context)
@@ -145,14 +145,14 @@ class BusError(Exception):
 
 class DouYinVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None,
-                 check_video=False, info=None, collection=None):
+                 check_video=False, info=None, collection=None,local_executable_path =None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
         self.date_format = '%Y年%m月%d日 %H:%M'
-        self.local_executable_path = LOCAL_CHROME_PATH
+        self.local_executable_path = local_executable_path if local_executable_path else LOCAL_CHROME_PATH
         self.thumbnail_path = thumbnail_path
         self.goods = goods
         self.check_video = check_video
