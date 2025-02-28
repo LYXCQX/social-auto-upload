@@ -18,6 +18,9 @@ from social_auto_upload.utils.log import douyin_logger
 
 from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_have_task
 
+from social_auto_upload.utils.bus_exception import UpdateError,BusError
+
+
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
 failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
@@ -127,21 +130,6 @@ async def douyin_cookie_gen(account_file,local_executable_path=None):
         return user_id, user_name, response_data
 
 
-# 添加自定义异常类
-class UpdateError(Exception):
-    """任务未找到异常"""
-
-    def __init__(self, message=None):
-        self.message = message or "没有找到任务标签，可能还没接取该任务，请先接取任务"
-        super().__init__(self.message)
-
-class BusError(Exception):
-    """任务未找到异常"""
-
-    def __init__(self, message=None):
-        self.message = message or "业务异常，"
-        super().__init__(self.message)
-
 
 class DouYinVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None,
@@ -202,13 +190,18 @@ class DouYinVideo(object):
             anchor_info = self.info.get("anchor_info", None)
             playlet_title = anchor_info.get("title", None)
             playlet_title_tag = anchor_info.get("title_tag", None)
+            auto_order = self.info.get("auto_order", None)
             if self.info.get('use_xt'):
                 try:
                     # 创建一个浏览器上下文，使用指定的 cookie 文件
                     have_task, page = await xt_have_task(page, playlet_title)
                     if not have_task:
-                        douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
-                        have_task, page, n_url = await self.new_xt_task(page, playlet_title)
+                        if auto_order:
+                            douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
+                            have_task, page, n_url = await self.new_xt_task(page, playlet_title)
+                        else:
+                            douyin_logger.info('[+] 没有找到任务，也没有开启自动接单，直接返回')
+                            raise UpdateError("没有找到任务标签，也没有开启自动接单，请先接取任务")
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
                     have_task, page, n_url = await self.click_go_to_upload(have_task, page)
@@ -219,8 +212,12 @@ class DouYinVideo(object):
                 if playlet_title:
                     have_task, page, n_url = await self.check_have_task(page, playlet_title, playlet_title_tag)
                     if not have_task:
-                        douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
-                        page = await self.new_task(page, playlet_title, playlet_title_tag)
+                        if auto_order:
+                            douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
+                            page = await self.new_task(page, playlet_title, playlet_title_tag)
+                        else:
+                            douyin_logger.info('[+] 没有找到任务，也没有开启自动接单，直接返回')
+                            raise UpdateError("没有找到任务标签，也没有开启自动接单，请先接取任务")
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
         else:
@@ -391,7 +388,16 @@ class DouYinVideo(object):
 
 
     async def xt_click_plate(self, page, playlet_title):
-        print(playlet_title)
+        # 等待并点击行业标签
+        await page.wait_for_selector('span:text("行业：")', timeout=10000)
+        await page.locator('span:text("行业：")').click()
+        
+        # 选择短剧选项
+        await page.wait_for_selector('.xt-cascader-panel input', state='visible')
+        await page.locator('.xt-cascader-panel input').fill('短剧')
+        await page.wait_for_selector('.xt-cascader-panel .xt-option__content')
+        await page.locator('.xt-cascader-panel .xt-option__content').first.click()
+        
         search_input = page.locator('input[placeholder="请输入任务名称/ID"]')
         await search_input.fill(playlet_title)
         await page.keyboard.press('Enter')

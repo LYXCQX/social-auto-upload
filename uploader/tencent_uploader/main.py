@@ -10,6 +10,7 @@ import asyncio
 
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TENCENT
+from social_auto_upload.utils.bus_exception import UpdateError
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.files_times import get_absolute_path
 from social_auto_upload.utils.log import tencent_logger
@@ -35,9 +36,9 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
-async def cookie_auth(account_file):
+async def cookie_auth(account_file,local_executable_path=None):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True)
+        browser = await playwright.chromium.launch(headless=True, executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -53,13 +54,14 @@ async def cookie_auth(account_file):
             return True
 
 
-async def get_tencent_cookie(account_file):
+async def get_tencent_cookie(account_file, local_executable_path=None):
     async with async_playwright() as playwright:
         options = {
             'args': [
                 '--lang en-GB'
             ],
             'headless': False,  # Set headless option here
+            'executable_path': local_executable_path
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -88,6 +90,7 @@ async def get_tencent_cookie(account_file):
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
+        return user_id,user_name
 
 
 async def get_user_id(page):
@@ -106,26 +109,32 @@ async def get_user_id(page):
     return user_id
 
 
-async def weixin_setup(account_file, handle=False):
-    account_file = get_absolute_path(account_file, "tencent_uploader")
-    if not os.path.exists(account_file) or not await cookie_auth(account_file):
+async def weixin_setup(account_file, handle=False, local_executable_path=None):
+    # account_file = get_absolute_path(account_file, "tencent_uploader")
+    if not os.path.exists(account_file) or not await cookie_auth(account_file, local_executable_path=local_executable_path):
         if not handle:
             # Todo alert message
-            return False
+            return False, None, None
         tencent_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        await get_tencent_cookie(account_file)
-    return True
+        user_id, user_name = await get_tencent_cookie(account_file, local_executable_path=local_executable_path)
+    else:
+        # 新增：从 account_file 的文件名中提取用户 id 和 name
+        base_name = os.path.basename(account_file)
+        user_id, user_name = base_name.split('_')[:2]  # 假设文件名格式为 "user_id_user_name_account.json"
+    return True, user_id, user_name
 
 
 class TencentVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, local_executable_path=None,info=None,collection=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
         self.category = category
-        self.local_executable_path = LOCAL_CHROME_PATH
+        self.local_executable_path =  local_executable_path if local_executable_path else LOCAL_CHROME_PATH
+        self.info=info
+        self.collection=collection
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -169,6 +178,61 @@ class TencentVideo(object):
         file_input = page.locator('input[type="file"]')
         await file_input.set_input_files(self.file_path)
 
+    async def add_activity(self, page):
+        if not self.info:
+            return
+
+        anchor_info = self.info.get("anchor_info", None)
+        if not anchor_info:
+            return
+
+        playlet_title = anchor_info.get("title", None)
+        if not playlet_title:
+            return
+
+        tencent_logger.info(f"开始添加活动: {playlet_title}")
+
+        # 等待包含"活动"标签的form-item出现
+        await page.wait_for_selector('.form-item:has(.label:text("活动"))', state="visible", timeout=5000)
+        form_item = page.locator('.form-item:has(.label:text("活动"))')
+
+        # 查找并点击"不参与活动"按钮
+        no_activity_span = form_item.locator("span:has-text('不参与活动'):visible")
+        if await no_activity_span.is_visible():
+            await no_activity_span.click()
+            tencent_logger.info("已点击不参与活动")
+
+        # 等待活动列表加载
+        await page.wait_for_selector('.form-item:has(.label:text("活动")) .common-option-list-wrap', state="visible", timeout=5000)
+        search_activity_input = form_item.locator('input[placeholder="搜索活动"]')
+        # 填充活动标题
+        await search_activity_input.fill(playlet_title)
+        # 等待活动列表项出现
+        start_time = time.time()
+        while True:
+            activity_elements = await form_item.locator('.name').all()
+            if len(activity_elements) > 1:
+                break
+            if time.time() - start_time > 5:  # 5秒超时
+                raise TimeoutError("等待活动列表加载超时")
+            await asyncio.sleep(0.5)
+            
+        found = False
+
+        for element in activity_elements:
+            text = await element.text_content()
+            # 去除当前活动标题中的标点符号
+            clean_text = ''.join(char for char in text if char.isalnum() or char.isspace())
+            tencent_logger.info(f'已找到活动：{clean_text}--需要参加活动：{playlet_title}')
+            if clean_text.strip() == playlet_title.strip():
+                await element.click()
+                tencent_logger.info(f"成功添加活动: {playlet_title}")
+                found = True
+                break
+                
+        if not found:
+            raise UpdateError(f"没有找到该短剧任务{playlet_title}")
+
     async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
@@ -190,13 +254,15 @@ class TencentVideo(object):
         await self.add_title_tags(page)
         # 添加商品
         # await self.add_product(page)
-        # 合集功能
-        await self.add_collection(page)
         # 原创选择
         await self.add_original(page)
+        # 添加活动
+        await self.add_activity(page)
+        # 合集功能
+        await self.add_collection_with_create(page)
         # 检测上传状态
         await self.detect_upload_status(page)
-        if self.publish_date != 0:
+        if self.publish_date and self.publish_date != 0:
             await self.set_schedule_time_tencent(page, self.publish_date)
         # 添加短标题
         await self.add_short_title(page)
@@ -270,12 +336,69 @@ class TencentVideo(object):
             await page.keyboard.press("Space")
         tencent_logger.info(f"成功添加hashtag: {len(self.tags)}")
 
+
+    async def create_collection(self, page):
+        await page.get_by_text("创建新合集").click()
+        
+        # 等待输入框出现并可见
+        await page.wait_for_selector('input[placeholder="有趣的合集标题更容易吸引粉丝"]', state="visible", timeout=5000)
+        await page.fill('input[placeholder="有趣的合集标题更容易吸引粉丝"]', self.collection)
+        
+        # 等待创建按钮可点击
+        create_button = page.get_by_role("button", name="创建")
+        await create_button.wait_for(state="visible", timeout=5000)
+        await create_button.click()
+        
+        # 等待成功提示对话框出现
+        await page.wait_for_selector('.create-dialog-success-wrap', state="visible", timeout=5000)
+        try:
+            # 等待"我知道了"按钮可点击
+            know_button = page.locator('.create-dialog-success-wrap button:has-text("我知道了")')
+            await know_button.wait_for(state="enabled", timeout=5000)
+            await know_button.click()
+        except:
+            pass
+
+    async def add_collection_with_create(self, page):
+        if not self.collection:
+            return
+        found = await self.add_collection(page)
+        if not found:
+            await self.create_collection(page)
+            found = await self.add_collection(page)
+
     async def add_collection(self, page):
-        collection_elements = page.get_by_text("添加到合集").locator("xpath=following-sibling::div").locator(
-            '.option-list-wrap > div')
-        if await collection_elements.count() > 1:
-            await page.get_by_text("添加到合集").locator("xpath=following-sibling::div").click()
-            await collection_elements.first.click()
+        if not self.collection:
+            return
+            
+        await page.click('text=选择合集')
+        
+        # 等待合集列表容器可见
+        await page.wait_for_selector('.option-list-wrap', state="visible", timeout=5000)
+        
+        # 等待合集列表加载完成
+        start_time = time.time()
+        while True:
+            collection_elements = await page.locator('.option-list-wrap').locator('.name').all()
+            if len(collection_elements) > 1:
+                break
+            if time.time() - start_time > 5:  # 5秒超时
+                tencent_logger.warning("等待合集列表加载超时")
+                return False
+            await asyncio.sleep(0.5)
+
+        found = False
+        
+        # 查找匹配的合集
+        for element in collection_elements:
+            text = await element.text_content()
+            tencent_logger.info(f'找到合集：{text} 需要选择合集：{self.collection}')
+            if text.strip() == self.collection:
+                await element.click()
+                tencent_logger.info(f"成功选择合集: {self.collection}")
+                found = True
+                break
+        return found
 
     async def add_original(self, page):
         if await page.get_by_label("视频为原创").count():
