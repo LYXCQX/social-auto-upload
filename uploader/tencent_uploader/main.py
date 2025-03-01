@@ -125,7 +125,7 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None):
 
 
 class TencentVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, local_executable_path=None,info=None,collection=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, local_executable_path=None,info=None,collection=None,declare_original=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -135,6 +135,7 @@ class TencentVideo(object):
         self.local_executable_path =  local_executable_path if local_executable_path else LOCAL_CHROME_PATH
         self.info=info
         self.collection=collection
+        self.declare_original= declare_original
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -226,7 +227,10 @@ class TencentVideo(object):
             creator_name = await element.locator('.creator-name').text_content()
             # 去除当前活动标题中的标点符号
             tencent_logger.info(f'已找到活动：{name}--需要参加活动：{playlet_title}')
-            if playlet_title.strip() in name.strip() and playlet_title_tag in creator_name:
+            if playlet_title.strip() in name.strip():
+                if playlet_title_tag:
+                    if playlet_title_tag not in creator_name:
+                        continue
                 await element.click()
                 tencent_logger.info(f"成功添加活动: {playlet_title}")
                 found = True
@@ -258,12 +262,19 @@ class TencentVideo(object):
         # 添加商品
         # await self.add_product(page)
         # 原创选择
-        await self.add_original(page)
         if self.info.get("enable_drama", False):
+            tencent_logger.info('未选择挂剧')
             # 添加活动
             await self.add_activity(page)
-        # 合集功能
-        await self.add_collection_with_create(page)
+        try:
+            await self.add_original(page)
+        except:
+            tencent_logger.exception('添加原创失败，不影响执行')
+        try:
+            # 合集功能
+            await self.add_collection_with_create(page)
+        except:
+            tencent_logger.exception('添加合集失败，不影响执行')
         # 检测上传状态
         await self.detect_upload_status(page)
         if self.publish_date and self.publish_date != 0:
@@ -299,6 +310,8 @@ class TencentVideo(object):
                 tencent_logger.success("  [-]视频发布成功")
                 break
             except Exception as e:
+                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                    raise e  # 直接抛出异常
                 current_url = page.url
                 if "https://channels.weixin.qq.com/platform/post/list" in current_url:
                     tencent_logger.success("  [-]视频发布成功")
@@ -359,7 +372,15 @@ class TencentVideo(object):
             # 等待"我知道了"按钮可点击
             await page.locator('.create-dialog-success-wrap button:has-text("我知道了")').click()
         except:
-            tencent_logger.exception('我知道了，没找到')
+            try:
+                tencent_logger.exception('我知道了，没找到')
+                ycz = page.locator('div:text("此标题与现有合集重复，请修改标题后再试")')
+                if ycz.count() > 0:
+                    qx = page.locator('button:text("取消")')
+                    if qx.count() > 0:
+                        qx.click()
+            except:
+                pass
             pass
 
     async def add_collection_with_create(self, page):
@@ -375,15 +396,18 @@ class TencentVideo(object):
             return
             
         await page.click('text=选择合集')
-        
+
         # 等待合集列表容器可见
-        await page.wait_for_selector('.option-list-wrap', state="visible", timeout=5000)
-        
+        try:
+            await page.wait_for_selector('.option-list-wrap', state="visible", timeout=5000)
+        except:
+            pass
+
         # 等待合集列表加载完成
         start_time = time.time()
         while True:
-            collection_elements = await page.locator('.option-list-wrap').locator('.name').all()
-            if len(collection_elements) > 1:
+            collection_elements = await page.locator('.option-list-wrap').locator('.name:not(:has-text("创建新合集"))').all()
+            if len(collection_elements) > 0:
                 break
             if time.time() - start_time > 5:  # 5秒超时
                 tencent_logger.warning("等待合集列表加载超时")
@@ -404,6 +428,9 @@ class TencentVideo(object):
         return found
 
     async def add_original(self, page):
+        if not self.declare_original:
+            tencent_logger.info('未启用声明原创功能')
+            return
         if await page.get_by_label("视频为原创").count():
             await page.get_by_label("视频为原创").check()
         # 检查 "我已阅读并同意 《视频号原创声明使用条款》" 元素是否存在
