@@ -186,7 +186,7 @@ class DouYinVideo(object):
         context = await set_init_script(context)
         # 创建一个新的页面
         page = await context.new_page()
-        if self.info and self.info.get("anchor_info", None):
+        if self.info and self.info.get("anchor_info", None) and self.info.get("enable_drama", False):
             anchor_info = self.info.get("anchor_info", None)
             playlet_title = anchor_info.get("title", None)
             playlet_title_tag = anchor_info.get("title_tag", None)
@@ -309,9 +309,9 @@ class DouYinVideo(object):
         if self.publish_date and self.publish_date != 0:
             await self.set_schedule_time_douyin(page, self.publish_date)
         msg_res = '检测通过，暂未发现异常'
-        # 判断视频是否发布成功
+        # 判断视频启用成功
         while True:
-            # 判断视频是否发布成功
+            # 判断视频启用成功
             try:
                 publish_button = page.get_by_role('button', name="发布", exact=True)
                 if await publish_button.count():

@@ -216,7 +216,7 @@ class KSVideo(object):
         if self.publish_date != 0:
             await self.set_schedule_time(page, self.publish_date)
 
-        # 判断视频是否发布成功
+        # 判断视频启用成功
         while True:
             try:
                 publish_button = page.get_by_text("发布", exact=True)

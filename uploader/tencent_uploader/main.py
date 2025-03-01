@@ -189,7 +189,7 @@ class TencentVideo(object):
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
             return
-
+        playlet_title_tag = anchor_info.get("playlet_title_tag", None)
         tencent_logger.info(f"开始添加活动: {playlet_title}")
 
         # 等待包含"活动"标签的form-item出现
@@ -210,30 +210,33 @@ class TencentVideo(object):
         # 等待活动列表项出现
         start_time = time.time()
         while True:
-            activity_elements = await form_item.locator('.name').all()
+            activity_elements = await form_item.locator('.activity-item-info').all()
             if len(activity_elements) > 1:
                 break
             if time.time() - start_time > 5:  # 5秒超时
-                raise TimeoutError("等待活动列表加载超时")
+                raise UpdateError(f"没有找到该短剧任务{playlet_title}")
             await asyncio.sleep(0.5)
             
         found = False
 
         for element in activity_elements:
-            text = await element.text_content()
+            name = await element.locator('.name').text_content()
+            if name == '不参与活动':
+                continue
+            creator_name = await element.locator('.creator-name').text_content()
             # 去除当前活动标题中的标点符号
-            clean_text = ''.join(char for char in text if char.isalnum() or char.isspace())
-            tencent_logger.info(f'已找到活动：{clean_text}--需要参加活动：{playlet_title}')
-            if clean_text.strip() == playlet_title.strip():
+            tencent_logger.info(f'已找到活动：{name}--需要参加活动：{playlet_title}')
+            if playlet_title.strip() in name.strip() and playlet_title_tag in creator_name:
                 await element.click()
                 tencent_logger.info(f"成功添加活动: {playlet_title}")
                 found = True
                 break
                 
         if not found:
-            raise UpdateError(f"没有找到该短剧任务{playlet_title}")
+            raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{playlet_title}")
 
     async def upload(self, playwright: Playwright) -> tuple[bool, str]:
+        print(self.local_executable_path)
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
@@ -256,8 +259,9 @@ class TencentVideo(object):
         # await self.add_product(page)
         # 原创选择
         await self.add_original(page)
-        # 添加活动
-        await self.add_activity(page)
+        if self.info.get("enable_drama", False):
+            # 添加活动
+            await self.add_activity(page)
         # 合集功能
         await self.add_collection_with_create(page)
         # 检测上传状态
@@ -350,13 +354,12 @@ class TencentVideo(object):
         await create_button.click()
         
         # 等待成功提示对话框出现
-        await page.wait_for_selector('.create-dialog-success-wrap', state="visible", timeout=5000)
         try:
+            await page.wait_for_selector('.create-dialog-success-wrap button:has-text("我知道了")', state="visible", timeout=5000)
             # 等待"我知道了"按钮可点击
-            know_button = page.locator('.create-dialog-success-wrap button:has-text("我知道了")')
-            await know_button.wait_for(state="enabled", timeout=5000)
-            await know_button.click()
+            await page.locator('.create-dialog-success-wrap button:has-text("我知道了")').click()
         except:
+            tencent_logger.exception('我知道了，没找到')
             pass
 
     async def add_collection_with_create(self, page):

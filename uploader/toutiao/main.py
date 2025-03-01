@@ -330,9 +330,9 @@ class TouTiaoVideo(object):
         if self.publish_date != 0:
             await self.set_schedule_time_toutiao(page, self.publish_date)
         msg_res = '检测通过，暂未发现异常'
-        # 判断视频是否发布成功
+        # 判断视频启用成功
         while True:
-            # 判断视频是否发布成功
+            # 判断视频启用成功
             try:
                 publish_button = page.locator('button span:text-is("发布")').first
                 if await publish_button.count():
