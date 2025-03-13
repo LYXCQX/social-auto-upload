@@ -263,9 +263,13 @@ class TencentVideo(object):
         # await self.add_product(page)
         # 原创选择
         if self.info.get("enable_drama", False):
-            tencent_logger.info('未选择挂剧')
             # 添加活动
-            await self.add_activity(page)
+            if self.info.get("enable_baobai", False):
+                await self.add_short_play_by_baobai(page)
+            else:
+                await self.add_activity(page)
+        else:
+            tencent_logger.info('未选择挂剧')
         try:
             await self.add_original(page)
         except:
@@ -291,6 +295,63 @@ class TencentVideo(object):
         await context.close()
         await browser.close()
         return True, msg_res
+
+    async def add_short_play_by_baobai(self, page):
+        # 等待并点击"选择链接"按钮
+        await page.wait_for_selector('text=选择链接', state='visible', timeout=5000)
+        await page.click('text=选择链接')
+        # 等待并点击"短剧"选项
+        await page.wait_for_selector('text=短剧', state='visible', timeout=5000)
+        await page.click('text=短剧')
+        # 等待并点击"选择需要添加的短剧"按钮
+        await page.wait_for_selector('text=选择需要添加的短剧', state='visible', timeout=5000)
+        await page.click('text=选择需要添加的短剧')
+        # 等待输入框出现
+        await page.wait_for_selector('input[placeholder="请输入短剧名称"]', state='visible', timeout=5000)
+        await page.click('input[placeholder="请输入短剧名称"]')
+        anchor_info = self.info.get("anchor_info", None)
+        if not anchor_info:
+            raise UpdateError(f"未找到挂剧参数：{anchor_info}")
+        playlet_title = anchor_info.get("title", None)
+        if not playlet_title:
+            raise UpdateError(f"未找到挂剧参数：{playlet_title}")
+        # 填充短剧名称
+        await page.fill('input[placeholder="请输入短剧名称"]', playlet_title)
+        # 设置开始时间和超时时间
+        start_time = time.time()
+        timeout = 20  # 20秒超时
+        found = False
+        while time.time() - start_time < timeout:
+            try:
+                # 等待高亮元素出现
+                await page.wait_for_selector('.drama-title', timeout=5000)
+
+                # 获取所有highlight类的元素
+                highlight_elements = await page.locator('.highlight').all()
+
+                # 遍历所有高亮元素
+                for element in highlight_elements:
+                    text_content = await element.text_content()
+                    tencent_logger.info(f'找到高亮元素：{text_content}')
+                    if playlet_title in text_content:
+                        await element.click()
+                        tencent_logger.info(f'点击了包含{playlet_title}的高亮元素')
+                        found = True
+                        break
+
+                if found:
+                    break
+
+                tencent_logger.info('未找到匹配元素，等待0.5秒后重试...')
+                await asyncio.sleep(0.5)
+
+            except Exception as e:
+                tencent_logger.warning(f'查找高亮元素时发生错误：{str(e)}')
+                await asyncio.sleep(0.5)
+                continue
+        if not found:
+            tencent_logger.error(f'超时{timeout}秒，未找到包含{playlet_title}的高亮元素')
+            raise UpdateError(f"未找到匹配的短剧：{playlet_title}")
 
     async def add_short_title(self, page):
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
