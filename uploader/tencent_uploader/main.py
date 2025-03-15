@@ -2,6 +2,7 @@
 import time
 from datetime import datetime
 from typing import Tuple
+import uuid
 
 import loguru
 from playwright.async_api import Playwright, async_playwright
@@ -240,7 +241,6 @@ class TencentVideo(object):
             raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{playlet_title}")
 
     async def upload(self, playwright: Playwright) -> tuple[bool, str]:
-        print(self.local_executable_path)
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
@@ -257,11 +257,13 @@ class TencentVideo(object):
         # await page.wait_for_selector('input[type="file"]', timeout=10000)
         file_input = page.locator('input[type="file"]')
         await file_input.set_input_files(self.file_path)
+        # if self.info and self.info.get("delete_platform_video", False):
+        #     random_uuid = str(uuid.uuid4())[:5]
+        #     self.title = f"{self.title}{random_uuid}"
         # 填充标题和话题
         await self.add_title_tags(page)
         # 添加商品
         # await self.add_product(page)
-        # 原创选择
         if self.info.get("enable_drama", False):
             # 添加活动
             if self.info.get("enable_baobai", False):
@@ -270,6 +272,7 @@ class TencentVideo(object):
                 await self.add_activity(page)
         else:
             tencent_logger.info('未选择挂剧')
+
         try:
             await self.add_original(page)
         except:
@@ -290,11 +293,156 @@ class TencentVideo(object):
 
         await context.storage_state(path=f"{self.account_file}")  # 保存cookie
         tencent_logger.success('  [-]cookie更新完毕！')
-        await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
+        await self.delete_video(page)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
         return True, msg_res
+
+    async def delete_video(self, page):
+        # 检查是否需要删除视频
+        if self.info and self.info.get("delete_platform_video", False):
+            delete_delay = self.info.get("delete_delay")
+            tencent_logger.info(f"[删除流程] 准备开始删除视频，等待 {delete_delay} 秒")
+            await asyncio.sleep(delete_delay)
+
+            try:
+                post_time = None
+                last_deleted_time = None
+                is_first_time = False  # 标记是否使用第一个视频的时间
+                start_time = time.time()  # 记录开始时间
+                timeout = 20  # 20秒超时
+                
+                while True:  # 外层循环，直到找不到匹配的post_time为止
+                    current_time = time.time()
+                    elapsed = current_time - start_time
+                    tencent_logger.info(f"[删除流程] 当前循环已运行 {elapsed:.2f} 秒")
+                    
+                    # 检查是否超时
+                    if elapsed > timeout:
+                        tencent_logger.warning(f"[删除流程] 删除操作超过{timeout}秒，自动结束")
+                        break
+                        
+                    # 刷新页面
+                    tencent_logger.info("[删除流程] 刷新页面")
+                    await page.reload()
+                    await asyncio.sleep(1)  # 等待页面加载
+                    
+                    try:
+                        tencent_logger.info("[删除流程] 等待视频列表加载")
+                        await page.wait_for_selector('.post-feed-item', timeout=10000)
+                    except Exception as e:
+                        tencent_logger.error(f"[删除流程] 等待视频列表加载超时，未找到 post-feed-item 元素: {str(e)}")
+                        return
+                        
+                    found_video = False
+                    # 获取所有视频项
+                    feed_items = await page.locator('.post-feed-item').all()
+                    feed_count = len(feed_items)
+                    tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项")
+                    
+                    if not feed_items:
+                        tencent_logger.warning("[删除流程] 未找到任何视频项")
+                        break
+
+                    # 遍历所有视频项
+                    for index, item in enumerate(feed_items):
+                        try:
+                            if last_deleted_time:
+                                tencent_logger.info(f"[删除流程] 处理第 {index + 1}/{feed_count} 个视频，上次删除时间: {last_deleted_time}")
+                                # 如果已经有上次删除的时间，根据是否是第一个时间决定查找策略
+                                post_time_element = item.locator('.post-time')
+                                if await post_time_element.count() > 0:
+                                    current_post_time = await post_time_element.text_content()
+                                    current_post_time = current_post_time.strip()
+                                    tencent_logger.info(f"[删除流程] 当前视频发布时间: {current_post_time}")
+                                    
+                                    # 标准化时间格式后再比较
+                                    normalized_current = normalize_post_time(current_post_time)
+                                    normalized_last = normalize_post_time(last_deleted_time)
+                                    tencent_logger.info(f"[删除流程] 标准化后 - 当前时间: {normalized_current}, 上次删除时间: {normalized_last}")
+                                    
+                                    # 如果是第一个视频的时间，查找相等的
+                                    # 如果是第二个视频的时间，查找更大的
+                                    if (is_first_time and normalized_current == normalized_last) or \
+                                       (not is_first_time and normalized_current > normalized_last):
+                                        # 执行删除
+                                        delete_button = item.locator('text=删除')
+                                        if await delete_button.count() > 0:
+                                            tencent_logger.info(f"[删除流程] 找到删除按钮，准备删除视频")
+                                            await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+                                            await page.click('text=确定')
+                                            tencent_logger.success(f"[删除流程] 已删除发布时间为 {current_post_time} 的视频")
+                                            last_deleted_time = current_post_time
+                                            found_video = True
+                                            await asyncio.sleep(2)
+                                            break
+                            else:
+                                tencent_logger.info(f"[删除流程] 首次查找，处理第 {index + 1}/{feed_count} 个视频")
+                                # 第一次循环，需要记录时间
+                                time_element = item.locator('.post-time')
+                                if await time_element.count() > 0:
+                                    current_time = await time_element.text_content()
+                                    current_time = current_time.strip()
+                                    tencent_logger.info(f"[删除流程] 首次发现视频，发布时间: {current_time}")
+                                
+                                if index == 0:
+                                    element_html = await item.evaluate('element => element.outerHTML')
+                                    print(element_html)
+                                    # 如果是第一个视频且有时间，直接使用
+                                    if current_time:
+                                        post_time = current_time
+                                        last_deleted_time = current_time
+                                        is_first_time = True  # 标记使用了第一个视频的时间
+                                        tencent_logger.info(f"[删除流程] 使用第一个视频的发布时间: {post_time}")
+                                    # 第一个没有时间，继续查找
+                                    # 执行删除
+                                    delete_button = item.locator('text=删除')
+                                    if await delete_button.count() > 0:
+                                        tencent_logger.info("[删除流程] 找到第一个视频的删除按钮，准备删除")
+                                        await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+                                        await page.click('text=确定')
+                                        tencent_logger.success("[删除流程] 已删除第一个视频")
+                                        found_video = True
+                                        await asyncio.sleep(2)
+                                        break
+                                    continue
+                                elif not post_time:
+                                    # 如果还没有记录时间（说明第一个视频没有时间），使用当前视频的时间
+                                    post_time = current_time
+                                    last_deleted_time = current_time
+                                    is_first_time = False  # 标记使用了第二个视频的时间
+                                    tencent_logger.info(f"[删除流程] 使用第二个视频的发布时间: {post_time}")
+                                    break
+                                    
+                                # 执行删除
+                                delete_button = item.locator('text=删除')
+                                if await delete_button.count() > 0:
+                                    tencent_logger.info("[删除流程] 找到删除按钮，准备删除视频")
+                                    await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+                                    await page.click('text=确定')
+                                    tencent_logger.success("[删除流程] 已删除视频")
+                                    found_video = True
+                                    await asyncio.sleep(2)
+                                    break
+                                        
+                        except Exception as e:
+                            tencent_logger.warning(f"[删除流程] 处理视频项时出错：{str(e)}")
+                            continue
+                    
+                    # 如果没有找到匹配的视频，说明删除完成
+                    if not found_video:
+                        if last_deleted_time:
+                            if is_first_time:
+                                tencent_logger.info(f"[删除流程] 未找到更多时间为 {last_deleted_time} 的视频，删除操作完成")
+                            else:
+                                tencent_logger.info(f"[删除流程] 未找到更多晚于 {last_deleted_time} 的视频，删除操作完成")
+                        else:
+                            tencent_logger.warning(f"[删除流程] 未找到要删除的视频")
+                        break
+                        
+            except Exception as e:
+                tencent_logger.exception(f"[删除流程] 删除视频时出错：{str(e)}")
 
     async def add_short_play_by_baobai(self, page):
         # 等待并点击"选择链接"按钮
@@ -316,14 +464,16 @@ class TencentVideo(object):
         if not playlet_title:
             raise UpdateError(f"未找到挂剧参数：{playlet_title}")
         # 填充短剧名称
-        await page.fill('input[placeholder="请输入短剧名称"]', playlet_title)
         # 设置开始时间和超时时间
         start_time = time.time()
         timeout = 20  # 20秒超时
         found = False
+        retry_count = 0
+        page_index = 1
         while time.time() - start_time < timeout:
             try:
-                # 等待高亮元素出现
+                if page_index == 1:
+                    await page.fill('input[placeholder="请输入短剧名称"]', playlet_title)
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
                 # 获取所有highlight类的元素
@@ -331,16 +481,35 @@ class TencentVideo(object):
 
                 # 遍历所有高亮元素
                 for element in highlight_elements:
+                    is_disabled = await element.evaluate('el => el.hasAttribute("disabled") || el.classList.contains("disabled") || getComputedStyle(el).pointerEvents === "none"')
+                    is_interactive = not is_disabled
+                    
                     text_content = await element.text_content()
-                    tencent_logger.info(f'找到高亮元素：{text_content}')
-                    if playlet_title in text_content:
-                        await element.click()
+                    tencent_logger.info(f'找到高亮元素：{text_content}, 可交互:{is_interactive}')
+                    
+                    if playlet_title in text_content and is_interactive:
+                        await element.evaluate('el => el.click()')
                         tencent_logger.info(f'点击了包含{playlet_title}的高亮元素')
                         found = True
                         break
 
                 if found:
                     break
+
+                retry_count += 1
+                
+                # 如果循环3次还没找到，尝试翻页
+                if retry_count >= 3:
+                    # 查找下一页按钮
+                    next_page = page.locator('a:has-text("下一页")')
+                    if await next_page.count() > 0 and await next_page.is_visible():
+                        tencent_logger.info('当前页未找到，点击下一页继续查找')
+                        await next_page.click()
+                        # 重置重试计数
+                        retry_count = 0
+                        page_index += 1
+                        # 等待页面加载
+                        await asyncio.sleep(1)
 
                 tencent_logger.info('未找到匹配元素，等待0.5秒后重试...')
                 await asyncio.sleep(0.5)
@@ -349,6 +518,7 @@ class TencentVideo(object):
                 tencent_logger.warning(f'查找高亮元素时发生错误：{str(e)}')
                 await asyncio.sleep(0.5)
                 continue
+
         if not found:
             tencent_logger.error(f'超时{timeout}秒，未找到包含{playlet_title}的高亮元素')
             raise UpdateError(f"未找到匹配的短剧：{playlet_title}")
@@ -518,3 +688,14 @@ class TencentVideo(object):
     async def main(self):
         async with async_playwright() as playwright:
             return await self.upload(playwright)
+
+def normalize_post_time(post_time: str) -> str:
+    """标准化发布时间格式，便于比较"""
+    tencent_logger.debug(f"开始标准化时间: {post_time}")
+    # 移除可能存在的空格
+    post_time = post_time.strip()
+    # 统一年月日时间格式
+    post_time = post_time.replace('年', '-').replace('月', '-').replace('日', '')
+    # 如果时间包含空格（日期和时间之间），保留空格
+    tencent_logger.debug(f"标准化后的时间: {post_time}")
+    return post_time
