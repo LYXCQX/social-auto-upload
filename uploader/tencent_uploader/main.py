@@ -249,6 +249,7 @@ class TencentVideo(object):
         msg_res = '检测通过，暂未发现异常'
         # 创建一个新的页面
         page = await context.new_page()
+        old_title = self.title
         upload_count = 1
         if self.info and "video_upload_count" in self.info:
             upload_count = max(1, int(self.info.get("video_upload_count", 1)))  # 确保至少上传1次
@@ -266,6 +267,8 @@ class TencentVideo(object):
             if self.info and self.info.get("delete_platform_video", False) and i < upload_count-1:
                 random_uuid = str(uuid.uuid4())[:5]
                 self.title = f"{self.title}{random_uuid}"
+            else:
+                self.title = old_title
             # 填充标题和话题
             await self.add_title_tags(page)
             # 添加商品
