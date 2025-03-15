@@ -201,7 +201,7 @@ class DouYinVideo(object):
                             have_task, page, n_url = await self.new_xt_task(page, playlet_title)
                         else:
                             douyin_logger.info('[+] 没有找到任务，也没有开启自动接单，直接返回')
-                            raise UpdateError("没有找到任务标签，也没有开启自动接单，请先接取任务")
+                            raise UpdateError(f"没有找到任务标签:{playlet_title}，也没有开启自动接单，请先接取任务")
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
                     have_task, page, n_url = await self.click_go_to_upload(have_task, page)
@@ -217,7 +217,7 @@ class DouYinVideo(object):
                             page = await self.new_task(page, playlet_title, playlet_title_tag)
                         else:
                             douyin_logger.info('[+] 没有找到任务，也没有开启自动接单，直接返回')
-                            raise UpdateError("没有找到任务标签，也没有开启自动接单，请先接取任务")
+                            raise UpdateError(f"没有找到任务标签:{playlet_title}，也没有开启自动接单，请先接取任务")
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
         else:
@@ -460,7 +460,7 @@ class DouYinVideo(object):
         #     douyin_logger.info('[+] 直接点击了"我要投稿"按钮')
         #     return
             
-        raise UpdateError("没有找到任务标签，可能还没接取该任务，请先接取任务")
+        raise UpdateError(f"没有找到任务标签:{playlet_title}，可能还没接取该任务，请先接取任务")
 
     async def click_button_with_timeout(self, page, selector, button_name, parent_dom=None, timeout=30, force_click=False):
         """带超时的按钮点击
@@ -676,7 +676,7 @@ class DouYinVideo(object):
                 douyin_logger.info(f'[+] 选择了最高百分比的标签: {max_percent}%')
             else:
                 if new_task:
-                    raise UpdateError("没有找到任务标签，可能还没接取该任务，请先接取任务")
+                    raise UpdateError(f"没有找到任务标签:{playlet_title_tag}，可能还没接取该任务，请先接取任务")
                 else:
                     return False
         return True

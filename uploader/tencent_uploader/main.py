@@ -249,57 +249,139 @@ class TencentVideo(object):
         msg_res = '检测通过，暂未发现异常'
         # 创建一个新的页面
         page = await context.new_page()
-        # 访问指定的 URL
-        await page.goto("https://channels.weixin.qq.com/platform/post/create")
-        tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
-        # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
-        await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
-        # await page.wait_for_selector('input[type="file"]', timeout=10000)
-        file_input = page.locator('input[type="file"]')
-        await file_input.set_input_files(self.file_path)
-        # if self.info and self.info.get("delete_platform_video", False):
-        #     random_uuid = str(uuid.uuid4())[:5]
-        #     self.title = f"{self.title}{random_uuid}"
-        # 填充标题和话题
-        await self.add_title_tags(page)
-        # 添加商品
-        # await self.add_product(page)
-        if self.info.get("enable_drama", False):
-            # 添加活动
-            if self.info.get("enable_baobai", False):
-                await self.add_short_play_by_baobai(page)
+        upload_count = 1
+        if self.info and "video_upload_count" in self.info:
+            upload_count = max(1, int(self.info.get("video_upload_count", 1)))  # 确保至少上传1次
+            tencent_logger.info(f'[+]计划上传 {upload_count} 次 -------{self.title}.mp4')
+        for i in range(upload_count):
+            tencent_logger.info(f'[+]正在进行第 {i+1}/{upload_count} 次上传 -------{self.title}.mp4')
+            # 访问指定的 URL
+            await page.goto("https://channels.weixin.qq.com/platform/post/create")
+            tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
+            # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
+            await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
+            # await page.wait_for_selector('input[type="file"]', timeout=10000)
+            file_input = page.locator('input[type="file"]')
+            await file_input.set_input_files(self.file_path)
+            if self.info and self.info.get("delete_platform_video", False) and i < upload_count-1:
+                random_uuid = str(uuid.uuid4())[:5]
+                self.title = f"{self.title}{random_uuid}"
+            # 填充标题和话题
+            await self.add_title_tags(page)
+            # 添加商品
+            # await self.add_product(page)
+            if self.info.get("enable_drama", False):
+                # 添加活动
+                if self.info.get("enable_baobai", False):
+                    await self.add_short_play_by_baobai(page)
+                else:
+                    await self.add_activity(page)
             else:
-                await self.add_activity(page)
-        else:
-            tencent_logger.info('未选择挂剧')
+                tencent_logger.info('未选择挂剧')
 
-        try:
-            await self.add_original(page)
-        except:
-            tencent_logger.exception('添加原创失败，不影响执行')
-        try:
-            # 合集功能
-            await self.add_collection_with_create(page)
-        except:
-            tencent_logger.exception('添加合集失败，不影响执行')
-        # 检测上传状态
-        await self.detect_upload_status(page)
-        if self.publish_date and self.publish_date != 0:
-            await self.set_schedule_time_tencent(page, self.publish_date)
-        # 添加短标题
-        await self.add_short_title(page)
+            try:
+                await self.add_original(page)
+            except:
+                tencent_logger.exception('添加原创失败，不影响执行')
+            try:
+                # 合集功能
+                await self.add_collection_with_create(page)
+            except:
+                tencent_logger.exception('添加合集失败，不影响执行')
+            # 检测上传状态
+            await self.detect_upload_status(page)
+            if self.publish_date and self.publish_date != 0:
+                await self.set_schedule_time_tencent(page, self.publish_date)
+            # 添加短标题
+            await self.add_short_title(page)
 
-        await self.click_publish(page)
+            await self.click_publish(page)
 
-        await context.storage_state(path=f"{self.account_file}")  # 保存cookie
-        tencent_logger.success('  [-]cookie更新完毕！')
-        await self.delete_video(page)
+            await context.storage_state(path=f"{self.account_file}")  # 保存cookie
+            tencent_logger.success('  [-]cookie更新完毕！')
+            if i < upload_count-1:
+                await self.delete_video(page)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
         return True, msg_res
 
+
     async def delete_video(self, page):
+        # 检查是否需要删除视频
+        if self.info and self.info.get("delete_platform_video", False):
+            delete_delay = self.info.get("delete_delay")
+            tencent_logger.info(f"[删除流程] 准备开始删除视频，等待 {delete_delay} 秒")
+            await asyncio.sleep(delete_delay)
+
+            try:
+                is_first_time = False  # 标记是否使用第一个视频的时间
+                start_time = time.time()  # 记录开始时间
+                timeout = 20  # 20秒超时
+
+                while True:  # 外层循环，直到找不到匹配的post_time为止
+                    current_time = time.time()
+                    elapsed = current_time - start_time
+                    tencent_logger.info(f"[删除流程] 当前循环已运行 {elapsed:.2f} 秒")
+
+                    # 检查是否超时
+                    if elapsed > timeout:
+                        tencent_logger.warning(f"[删除流程] 删除操作超过{timeout}秒，自动结束")
+                        break
+
+                    # 刷新页面
+                    tencent_logger.info("[删除流程] 刷新页面")
+                    await page.reload()
+                    await asyncio.sleep(1)  # 等待页面加载
+
+                    try:
+                        tencent_logger.info("[删除流程] 等待视频列表加载")
+                        await page.wait_for_selector('.post-feed-item', timeout=10000)
+                    except Exception as e:
+                        tencent_logger.error(f"[删除流程] 等待视频列表加载超时，未找到 post-feed-item 元素: {str(e)}")
+                        return
+
+                    found_video = False
+                    # 获取所有视频项
+                    feed_items = await page.locator('.post-feed-item').all()
+                    if not feed_items:
+                        tencent_logger.warning("[删除流程] 未找到任何视频项")
+                        break
+
+                    feed_count = len(feed_items)
+                    tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项")
+
+                    # 遍历所有视频项
+                    for index, item in enumerate(feed_items):
+                        try:
+                            item_title = item.locator('.post-title')
+                            if await item_title.count() > 0:
+                                title_text = await item_title.text_content()
+                                if self.title in title_text:
+                                    # 执行删除
+                                    delete_button = item.locator('text=删除')
+                                    if await delete_button.count() > 0:
+                                        tencent_logger.info(f"[删除流程] 找到删除按钮，准备删除视频")
+                                        await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+                                        await page.click('text=确定')
+                                        found_video = True
+                                        is_first_time = True
+                                        await asyncio.sleep(2)
+                                        break
+                        except Exception as e:
+                            tencent_logger.exception(f"[删除流程] 处理视频项时出错：{str(e)}")
+                            continue
+                    # 如果没有找到匹配的视频，说明删除完成
+                    if not found_video:
+                        if is_first_time:
+                            tencent_logger.info(f"[删除流程] 未找到title为 {self.title} 的视频，删除操作完成")
+                        else:
+                            tencent_logger.warning(f"[删除流程] 未找到要删除的视频")
+                        break
+
+            except Exception as e:
+                tencent_logger.exception(f"[删除流程] 删除视频时出错：{str(e)}")
+    async def delete_video1(self, page):
         # 检查是否需要删除视频
         if self.info and self.info.get("delete_platform_video", False):
             delete_delay = self.info.get("delete_delay")
@@ -356,7 +438,8 @@ class TencentVideo(object):
                                     current_post_time = await post_time_element.text_content()
                                     current_post_time = current_post_time.strip()
                                     tencent_logger.info(f"[删除流程] 当前视频发布时间: {current_post_time}")
-                                    
+                                    element_html = await item.evaluate('element => element.outerHTML')
+                                    print(element_html)
                                     # 标准化时间格式后再比较
                                     normalized_current = normalize_post_time(current_post_time)
                                     normalized_last = normalize_post_time(last_deleted_time)
@@ -389,8 +472,8 @@ class TencentVideo(object):
                                 if index == 0:
                                     element_html = await item.evaluate('element => element.outerHTML')
                                     print(element_html)
-                                    # 如果是第一个视频且有时间，直接使用
-                                    if current_time:
+                                    clz_item = item.locator('text=处理中')
+                                    if await clz_item.count() == 0:
                                         post_time = current_time
                                         last_deleted_time = current_time
                                         is_first_time = True  # 标记使用了第一个视频的时间
@@ -427,7 +510,7 @@ class TencentVideo(object):
                                     break
                                         
                         except Exception as e:
-                            tencent_logger.warning(f"[删除流程] 处理视频项时出错：{str(e)}")
+                            tencent_logger.eexception(f"[删除流程] 处理视频项时出错：{str(e)}")
                             continue
                     
                     # 如果没有找到匹配的视频，说明删除完成
