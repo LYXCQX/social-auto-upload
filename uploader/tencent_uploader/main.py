@@ -264,7 +264,7 @@ class TencentVideo(object):
             # await page.wait_for_selector('input[type="file"]', timeout=10000)
             file_input = page.locator('input[type="file"]')
             await file_input.set_input_files(self.file_path)
-            if self.info and self.info.get("delete_platform_video", False) and i < upload_count-1:
+            if self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1):
                 random_uuid = str(uuid.uuid4())[:5]
                 self.title = f"{self.title}{random_uuid}"
             else:
@@ -302,7 +302,7 @@ class TencentVideo(object):
 
             await context.storage_state(path=f"{self.account_file}")  # 保存cookie
             tencent_logger.success('  [-]cookie更新完毕！')
-            if i < upload_count-1:
+            if self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1):
                 await self.delete_video(page)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
