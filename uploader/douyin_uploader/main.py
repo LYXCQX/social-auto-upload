@@ -690,27 +690,27 @@ class DouYinVideo(object):
             await page.locator('input[placeholder="请输入商品短标题"]').fill(self.goods.itemTitle)
             await page.click('text="完成编辑"')
 
-    async def set_thumbnail(self, page: Page, thumbnail_path: str):
-        if thumbnail_path:
-            await page.click('text="选择封面"')
-            await page.wait_for_selector("div.semi-modal-content:visible")
-            await page.click('text="设置竖封面"')
-            await page.wait_for_timeout(2000)  # 等待2秒
-            # 定位到上传区域并点击
-            # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
-            await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
-            await page.wait_for_timeout(2000)  # 等待2秒
-            await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
-    async def set_location(self, page: Page, location: str = "杭州市"):
-        # todo supoort location later
-        # await page.get_by_text('添加标签').locator("..").locator("..").locator("xpath=following-sibling::div").locator(
-        #     "div.semi-select-single").nth(0).click()
-        await page.locator('div.semi-select span:has-text("输入地理位置")').click()
-        await page.keyboard.press("Backspace")
-        await page.wait_for_timeout(2000)
-        await page.keyboard.type(location)
-        await page.wait_for_selector('div[role="listbox"] [role="option"]', timeout=5000)
-        await page.locator('div[role="listbox"] [role="option"]').first.click()
+    # async def set_thumbnail(self, page: Page, thumbnail_path: str):
+    #     if thumbnail_path:
+    #         await page.click('text="选择封面"')
+    #         await page.wait_for_selector("div.semi-modal-content:visible")
+    #         await page.click('text="设置竖封面"')
+    #         await page.wait_for_timeout(2000)  # 等待2秒
+    #         # 定位到上传区域并点击
+    #         # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
+    #         await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
+    #         await page.wait_for_timeout(2000)  # 等待2秒
+    #         await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
+    # async def set_location(self, page: Page, location: str = "杭州市"):
+    #     # todo supoort location later
+    #     # await page.get_by_text('添加标签').locator("..").locator("..").locator("xpath=following-sibling::div").locator(
+    #     #     "div.semi-select-single").nth(0).click()
+    #     await page.locator('div.semi-select span:has-text("输入地理位置")').click()
+    #     await page.keyboard.press("Backspace")
+    #     await page.wait_for_timeout(2000)
+    #     await page.keyboard.type(location)
+    #     await page.wait_for_selector('div[role="listbox"] [role="option"]', timeout=5000)
+    #     await page.locator('div[role="listbox"] [role="option"]').first.click()
 
     async def set_collection(self, page):
         """设置视频合集"""
