@@ -191,6 +191,7 @@ class TencentVideo(object):
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
             return
+        match_drama_name = anchor_info.get("match_drama_name", None)
         playlet_title_tag = anchor_info.get("playlet_title_tag", None)
         tencent_logger.info(f"开始添加活动: {playlet_title}")
 
@@ -228,7 +229,11 @@ class TencentVideo(object):
             creator_name = await element.locator('.creator-name').text_content()
             # 去除当前活动标题中的标点符号
             tencent_logger.info(f'已找到活动：{name}--需要参加活动：{playlet_title}')
-            if playlet_title.strip() in name.strip():
+            if match_drama_name:
+               have_platlet = playlet_title.strip() == name.strip()
+            else:
+                have_platlet = playlet_title.strip() in name.strip()
+            if have_platlet:
                 if playlet_title_tag:
                     if playlet_title_tag not in creator_name:
                         continue
@@ -273,6 +278,11 @@ class TencentVideo(object):
             await self.add_title_tags(page)
             # 添加商品
             # await self.add_product(page)
+            anchor_info = self.info.get("anchor_info", None)
+            if not anchor_info:
+                return
+            match_drama_name = anchor_info.get("match_drama_name", None)
+            print(f'sssss-{match_drama_name}')
             if self.info.get("enable_drama", False):
                 # 添加活动
                 if self.info.get("enable_baobai", False):
@@ -556,6 +566,10 @@ class TencentVideo(object):
         found = False
         retry_count = 0
         page_index = 1
+        anchor_info = self.info.get("anchor_info", None)
+        if not anchor_info:
+            return
+        match_drama_name = anchor_info.get("match_drama_name", None)
         while time.time() - start_time < timeout:
             try:
                 if page_index == 1:
@@ -572,8 +586,11 @@ class TencentVideo(object):
                     
                     text_content = await element.text_content()
                     tencent_logger.info(f'找到高亮元素：{text_content}, 可交互:{is_interactive}')
-                    
-                    if playlet_title in text_content and is_interactive:
+                    if match_drama_name:
+                        have_platlet = playlet_title == text_content
+                    else:
+                        have_platlet = playlet_title in text_content
+                    if have_platlet and is_interactive:
                         await element.evaluate('el => el.click()')
                         tencent_logger.info(f'点击了包含{playlet_title}的高亮元素')
                         found = True
