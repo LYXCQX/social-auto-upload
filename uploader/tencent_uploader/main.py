@@ -269,20 +269,8 @@ class TencentVideo(object):
             # await page.wait_for_selector('input[type="file"]', timeout=10000)
             file_input = page.locator('input[type="file"]')
             await file_input.set_input_files(self.file_path)
-            if self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1):
-                random_uuid = str(uuid.uuid4())[:5]
-                self.title = f"{self.title}{random_uuid}"
-            else:
-                self.title = old_title
-            # 填充标题和话题
-            await self.add_title_tags(page)
             # 添加商品
             # await self.add_product(page)
-            anchor_info = self.info.get("anchor_info", None)
-            if not anchor_info:
-                return
-            match_drama_name = anchor_info.get("match_drama_name", None)
-            print(f'sssss-{match_drama_name}')
             if self.info.get("enable_drama", False):
                 # 添加活动
                 if self.info.get("enable_baobai", False):
@@ -301,6 +289,17 @@ class TencentVideo(object):
                 await self.add_collection_with_create(page)
             except:
                 tencent_logger.exception('添加合集失败，不影响执行')
+            if self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1):
+                random_uuid = str(uuid.uuid4())[:5]
+                self.title = f"{self.title}{random_uuid}"
+            else:
+                self.title = old_title
+            if self.info and not self.info.get('location_enabled', False):
+                page.click('position-display')
+                page.click('text=不显示位置')
+            # 填充标题和话题
+            await self.add_title_tags(page)
+            await self.close_location(page)
             # 检测上传状态
             await self.detect_upload_status(page)
             if self.publish_date and self.publish_date != 0:
@@ -319,6 +318,25 @@ class TencentVideo(object):
         await browser.close()
         return True, msg_res
 
+    async def close_location(self, page):
+        if self.info and not self.info.get('location_enabled', False):
+            # 循环尝试10秒
+            start_time = time.time()
+            success = False
+            while time.time() - start_time < 10 and not success:
+                try:
+                    await page.wait_for_selector('.position-display', timeout=1000)
+                    await page.click('.position-display-wrap')
+                    await asyncio.sleep(0.5)
+                    await page.click('text=不显示位置')
+                    success = True
+                    tencent_logger.info('成功关闭位置显示')
+                    break
+                except:
+                    await asyncio.sleep(0.5)
+                    continue
+            if not success:
+                tencent_logger.warning('关闭位置显示失败，继续执行')
 
     async def delete_video(self, page):
         # 检查是否需要删除视频
