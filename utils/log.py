@@ -57,7 +57,7 @@ def create_logger(log_name: str, file_path: str):
     log_file = base_dir / file_path
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger.add(str(log_file), filter=filter_record, level="INFO", 
-              rotation="10 MB", retention="10 days", 
+              rotation="10 MB", retention="3 days",  # 保留3天的日志，自动清理3天前的日志
               backtrace=True, diagnose=True)
     return logger.bind(business_name=log_name)
 
@@ -80,7 +80,8 @@ except:
 # 添加文件日志
 logger.add(
     log_dir / "app_{time:YYYY-MM-DD}.log",
-    rotation="500 MB",
+    rotation="20 MB",
+    retention="3 days",  # 保留3天的日志，自动清理3天前的日志
     encoding="utf-8",
     format=log_formatter,
     level="INFO",
