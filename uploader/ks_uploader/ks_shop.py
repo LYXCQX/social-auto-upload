@@ -141,7 +141,6 @@ class KSVideo(object):
 
     async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         # 使用 Chromium 浏览器启动一个浏览器实例
-        print(self.local_executable_path)
         if self.local_executable_path:
             browser = await playwright.chromium.launch(
                 headless=False,
