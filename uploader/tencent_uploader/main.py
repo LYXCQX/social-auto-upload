@@ -279,7 +279,6 @@ class TencentVideo(object):
                     await self.add_activity(page)
             else:
                 tencent_logger.info('未选择挂剧')
-
             try:
                 await self.add_original(page)
             except:
@@ -294,9 +293,6 @@ class TencentVideo(object):
                 self.title = f"{self.title}{random_uuid}"
             else:
                 self.title = old_title
-            if self.info and not self.info.get('location_enabled', False):
-                page.click('position-display')
-                page.click('text=不显示位置')
             # 填充标题和话题
             await self.add_title_tags(page)
             await self.close_location(page)
@@ -328,7 +324,7 @@ class TencentVideo(object):
                     await page.wait_for_selector('.position-display', timeout=1000)
                     await page.click('.position-display-wrap')
                     await asyncio.sleep(0.5)
-                    await page.click('text=不显示位置')
+                    await page.click(':text-is("不显示位置")')
                     success = True
                     tencent_logger.info('成功关闭位置显示')
                     break
@@ -394,7 +390,7 @@ class TencentVideo(object):
                                     if await delete_button.count() > 0:
                                         tencent_logger.info(f"[删除流程] 找到删除按钮，准备删除视频")
                                         await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
-                                        await page.click('text=确定')
+                                        await page.click(':text-is("确定")')
                                         found_video = True
                                         is_first_time = True
                                         await asyncio.sleep(2)
@@ -414,14 +410,14 @@ class TencentVideo(object):
                 tencent_logger.exception(f"[删除流程] 删除视频时出错：{str(e)}")
     async def add_short_play_by_baobai(self, page):
         # 等待并点击"选择链接"按钮
-        await page.wait_for_selector('text=选择链接', state='visible', timeout=5000)
-        await page.click('text=选择链接')
-        # 等待并点击"短剧"选项
-        await page.wait_for_selector('text=短剧', state='visible', timeout=5000)
-        await page.click('text=短剧')
+        await page.wait_for_selector(':text-is("选择链接")', state='visible', timeout=5000)
+        await page.click(':text-is("选择链接")')
+        # 等待并点击"短剧"选项，使用精确匹配
+        await page.wait_for_selector(':text-is("短剧")', state='visible', timeout=5000)
+        await page.click(':text-is("短剧")')
         # 等待并点击"选择需要添加的短剧"按钮
-        await page.wait_for_selector('text=选择需要添加的短剧', state='visible', timeout=5000)
-        await page.click('text=选择需要添加的短剧')
+        await page.wait_for_selector(':text-is("选择需要添加的短剧")', state='visible', timeout=5000)
+        await page.click(':text-is("选择需要添加的短剧")')
         # 等待输入框出现
         await page.wait_for_selector('input[placeholder="请输入短剧名称"]', state='visible', timeout=5000)
         await page.click('input[placeholder="请输入短剧名称"]')
@@ -601,7 +597,7 @@ class TencentVideo(object):
         if not self.collection:
             return
             
-        await page.click('text=选择合集')
+        await page.click(':text-is("选择合集")')
 
         # 等待合集列表容器可见
         try:
