@@ -53,7 +53,10 @@ async def juliang_setup(account_file, handle=False, local_executable_path=None):
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
-        user_id, user_name, douyin_id = base_name.split('_')[:2]  # 假设文件名格式为 "user_id_user_name_account.json"
+        print(base_name)
+        douyin_id, douyin_user_name = base_name.split('_')[:2]  # 假设文件名格式为 "user_id_user_name_account.json"
+        user_id = None
+        user_name = None
 
     return True, user_id, user_name, douyin_id
 
@@ -95,7 +98,6 @@ async def get_user_id(page):
 
 
 async def juliang_cookie_gen(account_file, local_executable_path=None):
-    print(account_file)
     async with async_playwright() as playwright:
         # Make sure to run headed.
         browser = await playwright.chromium.launch(headless=False,
