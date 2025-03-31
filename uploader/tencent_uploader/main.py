@@ -445,7 +445,7 @@ class TencentVideo(object):
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
                 # 获取所有highlight类的元素
-                highlight_elements = await page.locator('.highlight').all()
+                highlight_elements = await page.locator('.drama-title').all()
 
                 # 遍历所有高亮元素
                 for element in highlight_elements:
