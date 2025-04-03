@@ -4,7 +4,6 @@ import os
 import sys
 
 from social_auto_upload.conf import BASE_DIR
-from social_auto_upload.utils.log import logger
 SOCIAL_MEDIA_DOUYIN = "douyin"
 SOCIAL_MEDIA_TENCENT = "tencent"
 SOCIAL_MEDIA_TIKTOK = "tiktok"
@@ -62,5 +61,5 @@ async def set_init_script(context):
             
         return context
     except Exception as e:
-        logger.info(f"设置初始化脚本失败: {str(e)}")
+        # logger.info(f"设置初始化脚本失败: {str(e)}")
         raise
