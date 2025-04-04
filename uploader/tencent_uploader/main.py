@@ -47,12 +47,12 @@ async def cookie_auth(account_file,local_executable_path=None):
         # 访问指定的 URL
         await page.goto("https://channels.weixin.qq.com/platform/post/create")
         try:
-            await page.wait_for_selector('div.title-name:has-text("微信小店")', timeout=5000)  # 等待5秒
-            tencent_logger.error("[+] 等待5秒 cookie 失效")
-            return False
-        except:
+            await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
             tencent_logger.success("[+] cookie 有效")
             return True
+        except:
+            tencent_logger.error("[+] 等待5秒 cookie 失效")
+            return False
 
 
 async def get_tencent_cookie(account_file, local_executable_path=None):
