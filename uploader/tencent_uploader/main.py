@@ -444,23 +444,23 @@ class TencentVideo(object):
                     await page.fill('input[placeholder="请输入短剧名称"]', playlet_title)
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
-                # 获取所有highlight类的元素
-                highlight_elements = await page.locator('.drama-title').all()
-
-                # 遍历所有高亮元素
-                for element in highlight_elements:
-                    is_disabled = await element.evaluate('el => el.hasAttribute("disabled") || el.classList.contains("disabled") || getComputedStyle(el).pointerEvents === "none"')
-                    is_interactive = not is_disabled
+                # 直接获取所有非禁用短剧项中的标题元素
+                drama_title_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-title').all()
+                
+                # 遍历所有短剧标题元素
+                for title_element in drama_title_elements:
+                    # 获取标题文本
+                    text_content = await title_element.text_content()
+                    tencent_logger.info(f'找到短剧标题：{text_content}')
                     
-                    text_content = await element.text_content()
-                    tencent_logger.info(f'找到高亮元素：{text_content}, 可交互:{is_interactive}')
+                    # 检查标题是否匹配
                     if match_drama_name:
                         have_platlet = playlet_title == text_content
                     else:
                         have_platlet = playlet_title in text_content
-                    if have_platlet and is_interactive:
-                        await element.evaluate('el => el.click()')
-                        tencent_logger.info(f'点击了包含{playlet_title}的高亮元素')
+                    if have_platlet:
+                        await title_element.evaluate('el => el.click()')
+                        tencent_logger.info(f'点击了包含{playlet_title}的短剧')
                         found = True
                         break
 
