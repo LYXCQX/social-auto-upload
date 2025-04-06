@@ -37,9 +37,9 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
-async def cookie_auth(account_file,local_executable_path=None):
+async def cookie_auth(account_file,local_executable_path=None,un_close=False):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True, executable_path=local_executable_path)
+        browser = await playwright.chromium.launch(headless=False if un_close else True, executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -49,6 +49,23 @@ async def cookie_auth(account_file,local_executable_path=None):
         try:
             await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
             tencent_logger.success("[+] cookie 有效")
+            if un_close:
+                # 如果不关闭浏览器，则进入循环等待页面关闭
+                try:
+                    # 等待页面关闭
+                    await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+                except:
+                    # 如果出现异常，可能是用户手动关闭了页面
+                    pass
+                finally:
+                    try:
+                        await context.close()
+                        await browser.close()
+                    except:
+                        pass
+            else:
+                await context.close()
+                await browser.close()
             return True
         except:
             tencent_logger.error("[+] 等待5秒 cookie 失效")

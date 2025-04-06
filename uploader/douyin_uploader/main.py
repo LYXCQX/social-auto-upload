@@ -27,12 +27,11 @@ failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
 failure_messages = json.loads(failure_messages_json)
 
 
-async def cookie_auth(account_file, local_executable_path=None):
+async def cookie_auth(account_file, local_executable_path=None,un_close=False):
     if not local_executable_path or not os.path.exists(local_executable_path):
         douyin_logger.warning(f"浏览器路径无效: {local_executable_path}")
-    print(account_file)
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True,
+        browser = await playwright.chromium.launch(headless=False if un_close else True,
                                                    executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
@@ -53,6 +52,23 @@ async def cookie_auth(account_file, local_executable_path=None):
             return False
         else:
             print("[+] cookie 有效")
+            if un_close:
+                # 如果不关闭浏览器，则进入循环等待页面关闭
+                try:
+                    # 等待页面关闭
+                    await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+                except:
+                    # 如果出现异常，可能是用户手动关闭了页面
+                    pass
+                finally:
+                    try:
+                        await context.close()
+                        await browser.close()
+                    except:
+                        pass
+            else:
+                await context.close()
+                await browser.close()
             return True
 
 
