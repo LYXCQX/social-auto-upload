@@ -657,7 +657,7 @@ class DouYinVideo(object):
             hash_index = hard_req_content.find('#')
             if hash_index != -1:
                 # 获取从第一个#到最后的内容作为标题
-                self.title = hard_req_content[hash_index:]
+                self.title = f"{hard_req_content[hash_index:]} {self.title}"
                 douyin_logger.info(f'[+] 从硬性要求中获取到标题: {self.title}')
             else:
                 douyin_logger.info("没有找到硬性要求标签")
