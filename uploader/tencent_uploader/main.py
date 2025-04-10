@@ -89,6 +89,14 @@ async def get_tencent_cookie(account_file, local_executable_path=None):
         context = await set_init_script(context)
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com")
+        try:
+            # 设置页面标题为 local_executable_path 的文件名
+            if account_file:
+                file_name = os.path.basename(account_file)
+                await page.evaluate(f'document.title = "{file_name}"')
+        except:
+            pass
+
         # await page.pause()
         # # 点击调试器的继续，保存cookie
         # await context.storage_state(path=account_file)

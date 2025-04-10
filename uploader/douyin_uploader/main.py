@@ -113,6 +113,13 @@ async def douyin_cookie_gen(account_file,local_executable_path=None):
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://creator.douyin.com/")
+        try:
+            # 设置页面标题为 local_executable_path 的文件名
+            if account_file:
+                file_name = os.path.basename(account_file)
+                await page.evaluate(f'document.title = "{file_name}"')
+        except:
+            pass
         login_url = page.url
         # await page.pause()
         start_time = time.time()
