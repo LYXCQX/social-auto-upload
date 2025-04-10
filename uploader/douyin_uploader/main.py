@@ -23,8 +23,8 @@ from social_auto_upload.utils.bus_exception import UpdateError,BusError
 
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
-failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
-failure_messages = json.loads(failure_messages_json)
+# failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
+# failure_messages = json.loads(failure_messages_json)
 
 
 async def cookie_auth(account_file, local_executable_path=None,un_close=False):
@@ -338,52 +338,52 @@ class DouYinVideo(object):
             try:
                 publish_button = page.get_by_role('button', name="发布", exact=True)
                 if await publish_button.count():
-                    start_time = time.time()
-                    if self.check_video:
-                        while True:
-                            try:
-                                if await page.locator('p.progressingContent-QEbwRE:has-text("视频检测中")').count() > 0:
-                                    douyin_logger.info("  [-] 视频检测中...")
-                                    await asyncio.sleep(2)
-                                # 获取视频检测状态
-                                if (await page.locator('div:has-text("作品未见异常")').count() > 0 or
-                                        await page.locator('div:has-text("仅支持检测5分钟以内的视频")').count() > 0):
-                                    break
-                                elif await page.locator(
-                                        'section.contentWrapper-j5kIqC').count() > 0 or await page.locator(
-                                    'div.detectItemTitle-X5pTL9').count() > 0:
-                                    j5kIqC = await page.query_selector('section.contentWrapper-j5kIqC')
-                                    if j5kIqC:
-                                        msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
-                                    X5pTL9 = await page.query_selector('div.detectItemTitle-X5pTL9')
-                                    if X5pTL9:
-                                        msg_res = await page.locator('div.detectItemTitle-X5pTL9').text_content()
-                                    if msg_res in failure_messages:
-                                        douyin_logger.error(f"  [-] 视频检测失败: {msg_res}")
-                                        return False, msg_res
-                                    else:
-                                        douyin_logger.success("  [-] 视频检测通过")
-                                        break
-
-                                # 检查检测时间是否超过5分钟
-                                current_time = time.time()
-                                elapsed_time = current_time - start_time
-                                if elapsed_time > 300:
-                                    page_content = await page.content()
-                                    douyin_logger.info(f"页面内容: {page_content}")
-                                    msg_res = '五分钟也没有检测结果，直接返回'
-                                    break
-                            except:
-                                # 检查检测时间是否超过5分钟
-                                current_time = time.time()
-                                elapsed_time = current_time - start_time
-                                if elapsed_time > 300:
-                                    page_content = await page.content()
-                                    douyin_logger.info(f"页面内容: {page_content}")
-                                    msg_res = '五分钟也没有检测结果，直接返回'
-                                    break
-                                douyin_logger.info("  [-] 视频检测中...")
-                                await asyncio.sleep(2)
+                    # start_time = time.time()
+                    # if self.check_video:
+                    #     while True:
+                    #         try:
+                    #             if await page.locator('p.progressingContent-QEbwRE:has-text("视频检测中")').count() > 0:
+                    #                 douyin_logger.info("  [-] 视频检测中...")
+                    #                 await asyncio.sleep(2)
+                    #             # 获取视频检测状态
+                    #             if (await page.locator('div:has-text("作品未见异常")').count() > 0 or
+                    #                     await page.locator('div:has-text("仅支持检测5分钟以内的视频")').count() > 0):
+                    #                 break
+                    #             elif await page.locator(
+                    #                     'section.contentWrapper-j5kIqC').count() > 0 or await page.locator(
+                    #                 'div.detectItemTitle-X5pTL9').count() > 0:
+                    #                 j5kIqC = await page.query_selector('section.contentWrapper-j5kIqC')
+                    #                 if j5kIqC:
+                    #                     msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
+                    #                 X5pTL9 = await page.query_selector('div.detectItemTitle-X5pTL9')
+                    #                 if X5pTL9:
+                    #                     msg_res = await page.locator('div.detectItemTitle-X5pTL9').text_content()
+                    #                 if msg_res in failure_messages:
+                    #                     douyin_logger.error(f"  [-] 视频检测失败: {msg_res}")
+                    #                     return False, msg_res
+                    #                 else:
+                    #                     douyin_logger.success("  [-] 视频检测通过")
+                    #                     break
+                    #
+                    #             # 检查检测时间是否超过5分钟
+                    #             current_time = time.time()
+                    #             elapsed_time = current_time - start_time
+                    #             if elapsed_time > 300:
+                    #                 page_content = await page.content()
+                    #                 douyin_logger.info(f"页面内容: {page_content}")
+                    #                 msg_res = '五分钟也没有检测结果，直接返回'
+                    #                 break
+                    #         except:
+                    #             # 检查检测时间是否超过5分钟
+                    #             current_time = time.time()
+                    #             elapsed_time = current_time - start_time
+                    #             if elapsed_time > 300:
+                    #                 page_content = await page.content()
+                    #                 douyin_logger.info(f"页面内容: {page_content}")
+                    #                 msg_res = '五分钟也没有检测结果，直接返回'
+                    #                 break
+                    #             douyin_logger.info("  [-] 视频检测中...")
+                    #             await asyncio.sleep(2)
                     await publish_button.click()
                 await page.wait_for_url("https://creator.douyin.com/creator-micro/content/manage**",
                                         timeout=3000)  # 如果自动跳转到作品页面，则代表发布成功

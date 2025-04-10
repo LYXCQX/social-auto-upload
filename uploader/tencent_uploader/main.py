@@ -685,13 +685,13 @@ class TencentVideo(object):
         async with async_playwright() as playwright:
             return await self.upload(playwright)
 
-def normalize_post_time(post_time: str) -> str:
-    """标准化发布时间格式，便于比较"""
-    tencent_logger.debug(f"开始标准化时间: {post_time}")
-    # 移除可能存在的空格
-    post_time = post_time.strip()
-    # 统一年月日时间格式
-    post_time = post_time.replace('年', '-').replace('月', '-').replace('日', '')
-    # 如果时间包含空格（日期和时间之间），保留空格
-    tencent_logger.debug(f"标准化后的时间: {post_time}")
-    return post_time
+# def normalize_post_time(post_time: str) -> str:
+#     """标准化发布时间格式，便于比较"""
+#     tencent_logger.debug(f"开始标准化时间: {post_time}")
+#     # 移除可能存在的空格
+#     post_time = post_time.strip()
+#     # 统一年月日时间格式
+#     post_time = post_time.replace('年', '-').replace('月', '-').replace('日', '')
+#     # 如果时间包含空格（日期和时间之间），保留空格
+#     tencent_logger.debug(f"标准化后的时间: {post_time}")
+#     return post_time
