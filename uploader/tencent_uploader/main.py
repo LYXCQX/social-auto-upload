@@ -313,7 +313,8 @@ class TencentVideo(object):
                 await self.add_collection_with_create(page)
             except:
                 tencent_logger.exception('添加合集失败，不影响执行')
-            if self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1):
+            should_delete = self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1)
+            if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
                 self.title = f"{self.title}{random_uuid}"
             else:
@@ -323,7 +324,7 @@ class TencentVideo(object):
             await self.close_location(page)
             # 检测上传状态
             await self.detect_upload_status(page)
-            if self.publish_date and self.publish_date != 0:
+            if self.publish_date and self.publish_date != 0 and not should_delete:
                 await self.set_schedule_time_tencent(page, self.publish_date)
             # 添加短标题
             await self.add_short_title(page)
@@ -332,7 +333,7 @@ class TencentVideo(object):
 
             await context.storage_state(path=f"{self.account_file}")  # 保存cookie
             tencent_logger.success('  [-]cookie更新完毕！')
-            if self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1):
+            if should_delete:
                 await self.delete_video(page)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
