@@ -19,7 +19,7 @@ from social_auto_upload.utils.log import tencent_logger
 
 def format_str_for_short_title(origin_title: str) -> str:
     # 定义允许的特殊字符
-    allowed_special_chars = "《》“”:+?%°"
+    allowed_special_chars = "《》""+?%°"
 
     # 移除不允许的特殊字符
     filtered_chars = [char if char.isalnum() or char in allowed_special_chars else ' ' if char == ',' else '' for
@@ -529,11 +529,41 @@ class TencentVideo(object):
             await short_title_element.fill(short_title)
 
     async def click_publish(self, page):
+        start_time = time.time()
+        timeout = 120  # 两分钟超时
         while True:
             try:
+                # 检查是否超时
+                if time.time() - start_time > timeout:
+                    tencent_logger.warning("  [-] 发布操作超过两分钟，强制结束")
+                    break
+                
+                await asyncio.sleep(10)
+                tencent_logger.info("  [-] 开始检查编辑保留提示框...")
+                
+                # 检查是否出现"将此次编辑保留?"文本
+                has_edit_retain = await page.locator('div:has-text("将此次编辑保留?")').count() > 0
+                tencent_logger.info(f"  [-] 是否找到编辑保留提示框: {has_edit_retain}")
+                
+                if has_edit_retain:
+                    # 点击该div下的关闭按钮
+                    close_button = page.locator('div:has-text("将此次编辑保留?") button.weui-desktop-icon-btn.weui-desktop-dialog__close-btn')
+                    has_close_button = await close_button.count() > 0
+                    tencent_logger.info(f"  [-] 是否找到关闭按钮: {has_close_button}")
+                    
+                    if has_close_button:
+                        await close_button.click()
+                        tencent_logger.info("  [-] 已点击关闭编辑保留提示框")
+                        await asyncio.sleep(0.5)
+                        continue
+                    else:
+                        tencent_logger.warning("  [-] 未找到关闭按钮")
+                    
+                tencent_logger.info("  [-] 尝试点击发布按钮...")
                 publish_buttion = page.locator('div.form-btns button:has-text("发表")')
                 if await publish_buttion.count():
                     await publish_buttion.click()
+                    tencent_logger.info("  [-] 已点击发布按钮")
                 await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=1500)
                 tencent_logger.success("  [-]视频发布成功")
                 break
