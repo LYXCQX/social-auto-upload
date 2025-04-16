@@ -546,17 +546,18 @@ class TencentVideo(object):
                 tencent_logger.info(f"  [-] 是否找到编辑保留提示框: {has_edit_retain}")
                 
                 if has_edit_retain:
-                    # 查找并点击"不保存"按钮
-                    no_save_button = page.locator('button:has-text("不保存")').first
+                    # 查找并点击"不保存"按钮，直接校验可见性
+                    no_save_button = page.locator('button:has-text("不保存"):visible')
                     has_no_save_button = await no_save_button.count() > 0
-                    tencent_logger.info(f"  [-] 是否找到不保存按钮: {has_no_save_button}")
+                    tencent_logger.info(f"  [-] 是否找到可见的不保存按钮: {has_no_save_button}")
                     
                     if has_no_save_button:
                         await no_save_button.click()
+                        await page.goto('https://channels.weixin.qq.com/platform/post/list')
                         tencent_logger.info("  [-] 已点击不保存按钮")
                         break
                     else:
-                        tencent_logger.warning("  [-] 未找到不保存按钮")
+                        tencent_logger.warning("  [-] 未找到可见的不保存按钮")
                     
                 tencent_logger.info("  [-] 尝试点击发布按钮...")
                 publish_buttion = page.locator('div.form-btns button:has-text("发表")')
