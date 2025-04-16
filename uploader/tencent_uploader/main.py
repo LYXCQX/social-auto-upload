@@ -546,18 +546,17 @@ class TencentVideo(object):
                 tencent_logger.info(f"  [-] 是否找到编辑保留提示框: {has_edit_retain}")
                 
                 if has_edit_retain:
-                    # 点击该div下的关闭按钮
-                    close_button = page.locator('div:has-text("将此次编辑保留?") button.weui-desktop-icon-btn.weui-desktop-dialog__close-btn')
-                    has_close_button = await close_button.count() > 0
-                    tencent_logger.info(f"  [-] 是否找到关闭按钮: {has_close_button}")
+                    # 查找并点击"不保存"按钮
+                    no_save_button = page.locator('button:has-text("不保存")').first
+                    has_no_save_button = await no_save_button.count() > 0
+                    tencent_logger.info(f"  [-] 是否找到不保存按钮: {has_no_save_button}")
                     
-                    if has_close_button:
-                        await close_button.click()
-                        tencent_logger.info("  [-] 已点击关闭编辑保留提示框")
-                        await asyncio.sleep(0.5)
-                        continue
+                    if has_no_save_button:
+                        await no_save_button.click()
+                        tencent_logger.info("  [-] 已点击不保存按钮")
+                        break
                     else:
-                        tencent_logger.warning("  [-] 未找到关闭按钮")
+                        tencent_logger.warning("  [-] 未找到不保存按钮")
                     
                 tencent_logger.info("  [-] 尝试点击发布按钮...")
                 publish_buttion = page.locator('div.form-btns button:has-text("发表")')
