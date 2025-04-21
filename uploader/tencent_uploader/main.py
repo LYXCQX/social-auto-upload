@@ -453,6 +453,18 @@ class TencentVideo(object):
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
             raise UpdateError(f"未找到挂剧参数：{playlet_title}")
+            
+        # 处理剧名中的"---"分隔符，获取展示剧名和搜索剧名
+        display_title = playlet_title
+        search_title = playlet_title
+        
+        if "---" in playlet_title:
+            parts = playlet_title.split("---", 1)
+            if len(parts) == 2:
+                display_title = parts[0].strip()
+                search_title = parts[1].strip()
+                tencent_logger.info(f"检测到剧名分隔符，展示剧名: {display_title}, 搜索剧名: {search_title}")
+                
         # 填充短剧名称
         # 设置开始时间和超时时间
         start_time = time.time()
@@ -460,14 +472,13 @@ class TencentVideo(object):
         found = False
         retry_count = 0
         page_index = 1
-        anchor_info = self.info.get("anchor_info", None)
-        if not anchor_info:
-            return
         match_drama_name = anchor_info.get("match_drama_name", None)
+        
         while time.time() - start_time < timeout:
             try:
                 if page_index == 1:
-                    await page.fill('input[placeholder="请输入短剧名称"]', playlet_title)
+                    # 使用搜索剧名进行搜索
+                    await page.fill('input[placeholder="请输入短剧名称"]', search_title)
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
                 # 直接获取所有非禁用短剧项中的标题元素
@@ -479,14 +490,14 @@ class TencentVideo(object):
                     text_content = await title_element.text_content()
                     tencent_logger.info(f'找到短剧标题：{text_content}')
                     
-                    # 检查标题是否匹配
+                    # 检查标题是否匹配（使用展示剧名进行匹配）
                     if match_drama_name:
-                        have_platlet = playlet_title == text_content
+                        have_platlet = display_title == text_content
                     else:
-                        have_platlet = playlet_title in text_content
+                        have_platlet = display_title in text_content
                     if have_platlet:
                         await title_element.evaluate('el => el.click()')
-                        tencent_logger.info(f'点击了包含{playlet_title}的短剧')
+                        tencent_logger.info(f'点击了包含{display_title}的短剧')
                         found = True
                         break
 
@@ -517,8 +528,8 @@ class TencentVideo(object):
                 continue
 
         if not found:
-            tencent_logger.error(f'超时{timeout}秒，未找到包含{playlet_title}的高亮元素')
-            raise UpdateError(f"未找到匹配的短剧：{playlet_title}")
+            tencent_logger.error(f'超时{timeout}秒，未找到包含{display_title}的高亮元素')
+            raise UpdateError(f"未找到匹配的短剧：{display_title}")
 
     async def add_short_title(self, page):
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
