@@ -316,7 +316,7 @@ class DouYinVideo(object):
                 await asyncio.sleep(2)
 
         # 上传视频封面
-        # await self.set_thumbnail(page, self.thumbnail_path)
+        await self.set_thumbnail(page, self.thumbnail_path)
 
         # 更换可见元素
         # await self.set_location(page, "杭州市")
@@ -713,17 +713,17 @@ class DouYinVideo(object):
             await page.locator('input[placeholder="请输入商品短标题"]').fill(self.goods.itemTitle)
             await page.click('text="完成编辑"')
 
-    # async def set_thumbnail(self, page: Page, thumbnail_path: str):
-    #     if thumbnail_path:
-    #         await page.click('text="选择封面"')
-    #         await page.wait_for_selector("div.semi-modal-content:visible")
-    #         await page.click('text="设置竖封面"')
-    #         await page.wait_for_timeout(2000)  # 等待2秒
-    #         # 定位到上传区域并点击
-    #         # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
-    #         await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
-    #         await page.wait_for_timeout(2000)  # 等待2秒
-    #         await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
+    async def set_thumbnail(self, page: Page, thumbnail_path: str):
+        if thumbnail_path:
+            await page.click('text="选择封面"')
+            await page.wait_for_selector("div.semi-modal-content:visible")
+            await page.click('text="设置竖封面"')
+            await page.wait_for_timeout(2000)  # 等待2秒
+            # 定位到上传区域并点击
+            # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
+            await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
+            await page.wait_for_timeout(2000)  # 等待2秒
+            await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
     # async def set_location(self, page: Page, location: str = "杭州市"):
     #     # todo supoort location later
     #     # await page.get_by_text('添加标签').locator("..").locator("..").locator("xpath=following-sibling::div").locator(
