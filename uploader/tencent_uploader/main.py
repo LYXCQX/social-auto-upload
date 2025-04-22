@@ -213,12 +213,23 @@ class TencentVideo(object):
         if not anchor_info:
             return
 
+        # 获取展示剧名和搜索剧名
+        display_name = anchor_info.get("display_name", None)
+        search_name = anchor_info.get("search_name", None)
+        
+        # 如果没有设置专门的搜索剧名和展示剧名，则使用旧逻辑的剧名
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
             return
+            
+        # 优先使用搜索剧名进行搜索
+        search_title = search_name if search_name else playlet_title
+        # 优先使用展示剧名进行匹配
+        match_title = display_name if display_name else playlet_title
+        
         match_drama_name = anchor_info.get("match_drama_name", None)
         playlet_title_tag = anchor_info.get("playlet_title_tag", None)
-        tencent_logger.info(f"开始添加活动: {playlet_title}")
+        tencent_logger.info(f"开始添加活动: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
 
         # 等待包含"活动"标签的form-item出现
         await page.wait_for_selector('.form-item:has(.label:text("活动"))', state="visible", timeout=5000)
@@ -233,8 +244,8 @@ class TencentVideo(object):
         # 等待活动列表加载
         await page.wait_for_selector('.form-item:has(.label:text("活动")) .common-option-list-wrap', state="visible", timeout=5000)
         search_activity_input = form_item.locator('input[placeholder="搜索活动"]')
-        # 填充活动标题
-        await search_activity_input.fill(playlet_title)
+        # 使用搜索剧名填充活动搜索框
+        await search_activity_input.fill(search_title)
         # 等待活动列表项出现
         start_time = time.time()
         while True:
@@ -242,7 +253,7 @@ class TencentVideo(object):
             if len(activity_elements) > 1:
                 break
             if time.time() - start_time > 5:  # 5秒超时
-                raise UpdateError(f"没有找到该短剧任务{playlet_title}")
+                raise UpdateError(f"没有找到该短剧任务{search_title}")
             await asyncio.sleep(0.5)
             
         found = False
@@ -253,22 +264,22 @@ class TencentVideo(object):
                 continue
             creator_name = await element.locator('.creator-name').text_content()
             # 去除当前活动标题中的标点符号
-            tencent_logger.info(f'已找到活动：{name}--需要参加活动：{playlet_title}')
+            tencent_logger.info(f'已找到活动：{name}--需要匹配活动：{match_title}')
             if match_drama_name:
-               have_platlet = playlet_title.strip() == name.strip()
+               have_platlet = match_title.strip() == name.strip()
             else:
-                have_platlet = playlet_title.strip() in name.strip()
+                have_platlet = match_title.strip() in name.strip()
             if have_platlet:
                 if playlet_title_tag:
                     if playlet_title_tag not in creator_name:
                         continue
                 await element.click()
-                tencent_logger.info(f"成功添加活动: {playlet_title}")
+                tencent_logger.info(f"成功添加活动: {match_title}")
                 found = True
                 break
                 
         if not found:
-            raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{playlet_title}")
+            raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{match_title}")
 
     async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
@@ -450,21 +461,22 @@ class TencentVideo(object):
         anchor_info = self.info.get("anchor_info", None)
         if not anchor_info:
             raise UpdateError(f"未找到挂剧参数：{anchor_info}")
+            
+        # 获取展示剧名和搜索剧名
+        display_name = anchor_info.get("display_name", None)
+        search_name = anchor_info.get("search_name", None)
+        
+        # 如果没有设置专门的搜索剧名和展示剧名，则使用旧逻辑的剧名
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
             raise UpdateError(f"未找到挂剧参数：{playlet_title}")
             
-        # 处理剧名中的"---"分隔符，获取展示剧名和搜索剧名
-        display_title = playlet_title
-        search_title = playlet_title
+        # 优先使用搜索剧名进行搜索
+        search_title = search_name if search_name else playlet_title
+        # 优先使用展示剧名进行匹配
+        match_title = display_name if display_name else playlet_title
+        tencent_logger.info(f"开始添加短剧: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
         
-        if "---" in playlet_title:
-            parts = playlet_title.split("---", 1)
-            if len(parts) == 2:
-                display_title = parts[0].strip()
-                search_title = parts[1].strip()
-                tencent_logger.info(f"检测到剧名分隔符，展示剧名: {display_title}, 搜索剧名: {search_title}")
-                
         # 填充短剧名称
         # 设置开始时间和超时时间
         start_time = time.time()
@@ -473,11 +485,9 @@ class TencentVideo(object):
         retry_count = 0
         page_index = 1
         match_drama_name = anchor_info.get("match_drama_name", None)
-        
         while time.time() - start_time < timeout:
             try:
                 if page_index == 1:
-                    # 使用搜索剧名进行搜索
                     await page.fill('input[placeholder="请输入短剧名称"]', search_title)
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
@@ -490,14 +500,14 @@ class TencentVideo(object):
                     text_content = await title_element.text_content()
                     tencent_logger.info(f'找到短剧标题：{text_content}')
                     
-                    # 检查标题是否匹配（使用展示剧名进行匹配）
+                    # 检查标题是否匹配
                     if match_drama_name:
-                        have_platlet = display_title == text_content
+                        have_platlet = match_title == text_content
                     else:
-                        have_platlet = display_title in text_content
+                        have_platlet = match_title in text_content
                     if have_platlet:
                         await title_element.evaluate('el => el.click()')
-                        tencent_logger.info(f'点击了包含{display_title}的短剧')
+                        tencent_logger.info(f'点击了匹配【{match_title}】的短剧')
                         found = True
                         break
 
@@ -528,8 +538,8 @@ class TencentVideo(object):
                 continue
 
         if not found:
-            tencent_logger.error(f'超时{timeout}秒，未找到包含{display_title}的高亮元素')
-            raise UpdateError(f"未找到匹配的短剧：{display_title}")
+            tencent_logger.error(f'超时{timeout}秒，未找到匹配【{match_title}】的短剧')
+            raise UpdateError(f"未找到匹配的短剧：{match_title}")
 
     async def add_short_title(self, page):
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
