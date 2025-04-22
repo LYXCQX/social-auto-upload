@@ -33,14 +33,14 @@ def log_formatter(record: dict) -> str:
         "ERROR": "#ae2c2c"
     }
     color = colors.get(record["level"].name, "#b3cfe7")
-    
+
     # 基本日志格式
     log_format = f"<fg #70acde>{{time:YYYY-MM-DD HH:mm:ss}}</fg #70acde> | <fg {color}>{{level}}</fg {color}>: <light-white>{{message}}</light-white>\n"
-    
+
     # 如果有异常信息，添加异常部分
     if record["exception"]:
         log_format += "<red>{exception}</red>\n"
-        
+
     return log_format
 
 
@@ -56,7 +56,7 @@ def create_logger(log_name: str, file_path: str):
 
     log_file = base_dir / file_path
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger.add(str(log_file), filter=filter_record, level="INFO", 
+    logger.add(str(log_file), filter=filter_record, level="INFO",
               rotation="10 MB", retention="3 days",  # 保留3天的日志，自动清理3天前的日志
               backtrace=True, diagnose=True)
     return logger.bind(business_name=log_name)
@@ -68,8 +68,8 @@ logger.remove()
 # 尝试添加控制台输出，如果失败则跳过
 try:
     if sys.stdout is not None:
-        logger.add(sys.stdout, 
-                   colorize=True, 
+        logger.add(sys.stdout,
+                   colorize=True,
                    format=log_formatter,
                    backtrace=True,
                    diagnose=True)
@@ -97,7 +97,8 @@ platform_loggers = {
     'tiktok': 'tiktok',
     'bilibili': 'bilibili',
     'toutiao': 'toutiao',
-    'tencent': 'tencent'
+    'tencent': 'tencent',
+    'baijiahao': 'baijiahao'
 }
 
 # 创建所有平台的日志记录器，但只启用当前平台的日志文件

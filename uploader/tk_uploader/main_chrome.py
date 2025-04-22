@@ -86,7 +86,7 @@ class TiktokVideo(object):
         schedule_input_element = self.locator_base.get_by_label('Schedule')
         await schedule_input_element.wait_for(state='visible')  # 确保按钮可见
 
-        await schedule_input_element.click()
+        await schedule_input_element.click(force=True)
         if await self.locator_base.locator('div.TUXButton-content >> text=Allow').count():
             await self.locator_base.locator('div.TUXButton-content >> text=Allow').click()
 
@@ -128,15 +128,11 @@ class TiktokVideo(object):
         minute_selector = f"span.tiktok-timepicker-right:has-text('{minute_str}')"
 
         # pick hour first
-        await page.wait_for_timeout(500)  # 等待500毫秒
+        await page.wait_for_timeout(1000)  # 等待500毫秒
         await self.locator_base.locator(hour_selector).click()
         # click time button again
-        await page.wait_for_timeout(500)  # 等待500毫秒
-        await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
-        await page.wait_for_timeout(500)  # 等待500毫秒
+        await page.wait_for_timeout(1000)  # 等待500毫秒
         # pick minutes after
-        await scheduled_picker.locator('div.TUXInputBox').nth(0).click()
-        await page.wait_for_timeout(500)  # 等待500毫秒
         await self.locator_base.locator(minute_selector).click()
 
         # click title to remove the focus.
@@ -247,12 +243,15 @@ class TiktokVideo(object):
     async def change_language(self, page):
         # set the language to english
         await page.goto("https://www.tiktok.com")
-        await page.wait_for_url("https://www.tiktok.com/", timeout=100000)
-        await page.wait_for_selector('#header-more-menu-icon')
+        await page.wait_for_load_state('domcontentloaded')
+        await page.wait_for_selector('[data-e2e="nav-more-menu"]')
+        # 已经设置为英文, 省略这个步骤
+        if await page.locator('[data-e2e="nav-more-menu"]').text_content() == "More":
+            return
 
-        await page.locator('#header-more-menu-icon').hover()
+        await page.locator('[data-e2e="nav-more-menu"]').click()
         await page.locator('[data-e2e="language-select"]').click()
-        await page.locator('#lang-setting-popup-list >> text=English').click()
+        await page.locator('#creator-tools-selection-menu-header >> text=English').click()
 
     async def click_publish(self, page):
         success_flag_div = 'div.common-modal-confirm-modal'
@@ -262,18 +261,13 @@ class TiktokVideo(object):
                 if await publish_button.count():
                     await publish_button.click()
 
-                await self.locator_base.locator(success_flag_div).wait_for(state="visible", timeout=3000)
+                await page.wait_for_url("https://www.tiktok.com/tiktokstudio/content",  timeout=3000)
                 tiktok_logger.success("  [-] video published success")
                 break
             except Exception as e:
-                if await self.locator_base.locator(success_flag_div).count():
-                    tiktok_logger.success("  [-]video published success")
-                    break
-                else:
-                    tiktok_logger.exception(f"  [-] Exception: {e}")
-                    tiktok_logger.info("  [-] video publishing")
-                    await page.screenshot(full_page=True)
-                    await asyncio.sleep(0.5)
+                tiktok_logger.exception(f"  [-] Exception: {e}")
+                tiktok_logger.info("  [-] video publishing")
+                await asyncio.sleep(0.5)
 
     async def detect_upload_status(self, page):
         while True:
