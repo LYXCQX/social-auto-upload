@@ -472,6 +472,7 @@ class DouYinVideo(object):
                 print(f'最大佣金为{max_amount}')
                 # 点击最大金额对应的任务卡片
                 douyin_logger.info(f"任务卡片 HTML: {await max_card.evaluate('element => element.outerHTML')}")
+
                 await max_card.locator('button:has-text("我要投稿"):visible').click()
                 douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
                 return
@@ -577,6 +578,8 @@ class DouYinVideo(object):
         start_time = time.time()
         while True:
             submit_button = page.locator('span:text("我要投稿")')
+            if await submit_button.count() == 0:
+                submit_button = page.locator('span:text("预约投稿")')
             if await submit_button.count() > 0:
                 await submit_button.click()
                 await page.wait_for_timeout(1000)

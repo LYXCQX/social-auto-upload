@@ -152,7 +152,7 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None):
 
 class TencentVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, local_executable_path=None,info=None,collection=None,declare_original=None):
-        self.title = title  # 视频标题
+        self.title = title[:999]  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
@@ -618,6 +618,7 @@ class TencentVideo(object):
                         tencent_logger.error("  [-] 发现上传出错了...准备重试")
                         await self.handle_upload_error(page)
             except Exception as e:
+                tencent_logger.exception('上传中...')
                 if e.message == 'Locator.count: Target page, context or browser has been closed':
                     raise e  # 直接抛出异常
                 tencent_logger.info("  [-] 正在上传视频中...")
@@ -685,7 +686,7 @@ class TencentVideo(object):
         # 等待合集列表加载完成
         start_time = time.time()
         while True:
-            collection_elements = await page.locator('.option-list-wrap').locator('.name:not(:has-text("创建新合集"))').all()
+            collection_elements = await page.locator('.option-list-wrap').locator('.option-item:not(:has-text("创建新合集"))').all()
             if len(collection_elements) > 0:
                 break
             if time.time() - start_time > 5:  # 5秒超时
@@ -697,7 +698,7 @@ class TencentVideo(object):
         
         # 查找匹配的合集
         for element in collection_elements:
-            text = await element.text_content()
+            text = await element.locator('.name').text_content()
             tencent_logger.info(f'找到合集：{text} 需要选择合集：{self.collection}')
             if text.strip() == self.collection:
                 await element.click()
