@@ -338,7 +338,7 @@ class TencentVideo(object):
             if self.publish_date and self.publish_date != 0 and not should_delete:
                 await self.set_schedule_time_tencent(page, self.publish_date)
             # 添加短标题
-            await self.add_short_title(page)
+            # await self.add_short_title(page)
 
             await self.click_publish(page)
 
