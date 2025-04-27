@@ -686,7 +686,7 @@ class TencentVideo(object):
         # 等待合集列表加载完成
         start_time = time.time()
         while True:
-            collection_elements = await page.locator('.option-list-wrap').locator('.option-item:not(:has-text("创建新合集"))').all()
+            collection_elements = await page.locator('.option-list-wrap').locator('.option-item.item:not(:has-text("创建新合集"))').all()
             if len(collection_elements) > 0:
                 break
             if time.time() - start_time > 5:  # 5秒超时
