@@ -319,11 +319,6 @@ class TencentVideo(object):
                 await self.add_original(page)
             except:
                 tencent_logger.exception('添加原创失败，不影响执行')
-            try:
-                # 合集功能
-                await self.add_collection_with_create(page)
-            except:
-                tencent_logger.exception('添加合集失败，不影响执行')
             should_delete = self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1)
             if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
@@ -339,7 +334,11 @@ class TencentVideo(object):
                 await self.set_schedule_time_tencent(page, self.publish_date)
             # 添加短标题
             # await self.add_short_title(page)
-
+            try:
+                # 合集功能
+                await self.add_collection_with_create(page)
+            except:
+                tencent_logger.exception('添加合集失败，不影响执行')
             await self.click_publish(page)
 
             await context.storage_state(path=f"{self.account_file}")  # 保存cookie
@@ -589,7 +588,7 @@ class TencentVideo(object):
                 tencent_logger.success("  [-]视频发布成功")
                 break
             except Exception as e:
-                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                if 'Target page, context or browser has been closed' in e.message:
                     raise e  # 直接抛出异常
                 current_url = page.url
                 if "https://channels.weixin.qq.com/platform/post/list" in current_url:
@@ -619,7 +618,7 @@ class TencentVideo(object):
                         await self.handle_upload_error(page)
             except Exception as e:
                 tencent_logger.exception('上传中...')
-                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                if 'Target page, context or browser has been closed' in e.message:
                     raise e  # 直接抛出异常
                 tencent_logger.info("  [-] 正在上传视频中...")
                 await asyncio.sleep(2)
@@ -655,10 +654,10 @@ class TencentVideo(object):
             try:
                 tencent_logger.exception('我知道了，没找到')
                 ycz = page.locator('div:text("此标题与现有合集重复，请修改标题后再试")')
-                if ycz.count() > 0:
+                if await ycz.count() > 0:
                     qx = page.locator('button:text("取消")')
-                    if qx.count() > 0:
-                        qx.click()
+                    if await qx.count() > 0:
+                        await qx.click()
             except:
                 pass
             pass
@@ -686,7 +685,7 @@ class TencentVideo(object):
         # 等待合集列表加载完成
         start_time = time.time()
         while True:
-            collection_elements = await page.locator('.option-list-wrap').locator('.option-item.item:not(:has-text("创建新合集"))').all()
+            collection_elements = await page.locator('.option-list-wrap').locator('.option-item .item:not(:has-text("创建新合集"))').all()
             if len(collection_elements) > 0:
                 break
             if time.time() - start_time > 5:  # 5秒超时
@@ -701,7 +700,8 @@ class TencentVideo(object):
             text = await element.locator('.name').text_content()
             tencent_logger.info(f'找到合集：{text} 需要选择合集：{self.collection}')
             if text.strip() == self.collection:
-                await element.click()
+                # 使用JavaScript来执行点击操作
+                await element.evaluate('el => el.click()')
                 tencent_logger.info(f"成功选择合集: {self.collection}")
                 found = True
                 break

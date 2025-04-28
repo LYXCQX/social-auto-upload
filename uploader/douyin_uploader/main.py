@@ -309,7 +309,7 @@ class DouYinVideo(object):
                         douyin_logger.error("  [-] 发现上传出错了... 准备重试")
                         await self.handle_upload_error(page)
             except Exception as e:
-                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                if 'Target page, context or browser has been closed' in e.message:
                     raise e  # 直接抛出异常
                 douyin_logger.error(e)
                 douyin_logger.info("  [-] 正在上传视频中...")

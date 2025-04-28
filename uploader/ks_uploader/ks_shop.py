@@ -221,7 +221,7 @@ class KSVideo(object):
                         kuaishou_logger.info("正在上传视频中...")
                     await asyncio.sleep(2)
             except Exception as e:
-                if e.message == 'Locator.count: Target page, context or browser has been closed':
+                if 'Target page, context or browser has been closed' in e.message:
                     raise e  # 直接抛出异常
                 kuaishou_logger.error(f"检查上传状态时发生错误: {e}")
                 await asyncio.sleep(2)  # 等待 2 秒后重试
