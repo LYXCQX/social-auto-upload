@@ -345,7 +345,7 @@ class TencentVideo(object):
             tencent_logger.success('  [-]cookie更新完毕！')
             if should_delete:
                 await self.delete_video(page)
-        await self.delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
+        # await self.delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
@@ -511,19 +511,17 @@ class TencentVideo(object):
                             views_count = await views_element.count()
 
                             # 检查是否满足删除条件
-                            should_delete = True
-                            if minutes_ago and time_diff < minutes_ago:
-                                should_delete = False
-                            if max_views and views_count >= max_views:
-                                should_delete = False
+                            should_delete = False
+                            if minutes_ago and time_diff > minutes_ago and max_views and views_count < max_views:
+                                should_delete = True
 
                             if should_delete:
                                 # 执行删除
                                 delete_button = item.locator('text=删除')
                                 if await delete_button.count() > 0:
-                                    tencent_logger.info(f"[删除流程] 找到符合条件的视频，准备删除")
-                                    await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
-                                    await page.click(':text-is("确定")')
+                                    tencent_logger.info(f"[删除流程] 找到符合条件的视频，准备删除{item.locator('.post-title').text_content()}")
+                                    # await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+                                    # await page.click(':text-is("确定")')
                                     deleted_count += 1
                                     await asyncio.sleep(2)
                                     # 删除后重新获取视频列表
