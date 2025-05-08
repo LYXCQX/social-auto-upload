@@ -252,12 +252,12 @@ class DouYinVideo(object):
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload*")
         # 检查提示文字是否存在
         while True:
-            text_exists = await page.get_by_text("支持常用视频格式，推荐mp4、webm").is_visible()
+            text_exists = await page.get_by_text("点击上传 或直接将视频文件拖入此区域").is_visible()
             if text_exists:
                 douyin_logger.info("检测到上传页面已加载,正在刷新...")
                 await page.reload()
                 while True:
-                    text_exists = await page.get_by_text("支持常用视频格式，推荐mp4、webm").is_visible()
+                    text_exists = await page.get_by_text("点击上传 或直接将视频文件拖入此区域").is_visible()
                     if text_exists:
                         break
                 break
