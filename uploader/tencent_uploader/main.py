@@ -249,6 +249,7 @@ class TencentVideo(object):
         # 等待活动列表项出现
         start_time = time.time()
         while True:
+            await search_activity_input.fill(search_title)
             activity_elements = await form_item.locator('.activity-item-info').all()
             if len(activity_elements) > 1:
                 break
@@ -582,10 +583,12 @@ class TencentVideo(object):
         retry_count = 0
         page_index = 1
         match_drama_name = anchor_info.get("match_drama_name", None)
+        search_activity_input = page.locator('input[placeholder="请输入短剧名称"]')
+        await search_activity_input.fill(search_title)
         while time.time() - start_time < timeout:
             try:
                 if page_index == 1:
-                    await page.fill('input[placeholder="请输入短剧名称"]', search_title)
+                    await search_activity_input.fill(search_title)
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
                 # 直接获取所有非禁用短剧项中的标题元素
