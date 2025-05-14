@@ -588,6 +588,8 @@ class TencentVideo(object):
         while time.time() - start_time < timeout:
             try:
                 if page_index == 1:
+                    search_activity_input.clear()
+                    await asyncio.sleep(2)
                     await search_activity_input.fill(search_title)
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
@@ -633,7 +635,7 @@ class TencentVideo(object):
                 await asyncio.sleep(0.5)
 
             except Exception as e:
-                tencent_logger.warning(f'查找高亮元素时发生错误：{str(e)}')
+                tencent_logger.exception(f'查找高亮元素时发生错误')
                 await asyncio.sleep(0.5)
                 continue
 
@@ -795,17 +797,70 @@ class TencentVideo(object):
             await asyncio.sleep(0.5)
 
         found = False
+        last_count = 0
         
-        # 查找匹配的合集
-        for element in collection_elements:
-            text = await element.locator('.name').text_content()
-            tencent_logger.info(f'找到合集：{text} 需要选择合集：{self.collection}')
-            if text.strip() == self.collection:
-                # 使用JavaScript来执行点击操作
-                await element.evaluate('el => el.click()')
-                tencent_logger.info(f"成功选择合集: {self.collection}")
-                found = True
+        while not found:
+            # 获取当前所有合集元素
+            collection_elements = await page.locator('.option-list-wrap').locator('.option-item .item:not(:has-text("创建新合集"))').all()
+            current_count = len(collection_elements)
+            tencent_logger.info(f'当前找到 {current_count} 个合集')
+            
+            # 如果数量没有增加,说明已经到底了
+            if current_count == last_count:
+                tencent_logger.info('合集数量未增加，可能已到底部')
                 break
+                
+            # 查找匹配的合集
+            for element in collection_elements:
+                text = await element.locator('.name').text_content()
+                tencent_logger.info(f'找到合集：{text} 需要选择合集：{self.collection}')
+                if text.strip() == self.collection:
+                    # 使用JavaScript来执行点击操作
+                    await element.evaluate('el => el.click()')
+                    tencent_logger.info(f"成功选择合集: {self.collection}")
+                    found = True
+                    break
+                    
+            if found:
+                break
+                
+            # 记录当前数量
+            last_count = current_count
+            
+            try:
+                # 使用Playwright定位器找到滚动容器
+                scroll_container = page.locator('div.common-option-list-wrap.option-list-wrap')
+                if await scroll_container.count() > 0:
+                    # 获取滚动容器的位置和尺寸
+                    box = await scroll_container.bounding_box()
+                    if box:
+                        tencent_logger.info(f'找到滚动容器，位置: {box}')
+                        # 使用JavaScript执行滚动
+                        await page.evaluate('''(container) => {
+                            if (container) {
+                                const prevHeight = container.scrollHeight;
+                                container.scrollTop = prevHeight;
+                                return {
+                                    success: true,
+                                    prevHeight: prevHeight,
+                                    newScrollTop: container.scrollTop,
+                                    clientHeight: container.clientHeight,
+                                    scrollHeight: container.scrollHeight
+                                };
+                            }
+                            return { success: false };
+                        }''', await scroll_container.element_handle())
+                        tencent_logger.info('已执行滚动操作')
+                    else:
+                        tencent_logger.warning('找到滚动容器但无法获取位置信息')
+                else:
+                    tencent_logger.warning('未找到滚动容器')
+            except Exception as e:
+                tencent_logger.exception(f'滚动操作出错: {str(e)}')
+            
+            # 等待新内容加载
+            await asyncio.sleep(1)
+            
         return found
 
     async def add_original(self, page):
