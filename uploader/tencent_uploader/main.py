@@ -323,7 +323,7 @@ class TencentVideo(object):
             should_delete = self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1)
             if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
-                self.title = f"{self.title}{random_uuid}"
+                self.title = f"{random_uuid} {self.title}"
             else:
                 self.title = old_title
             # 填充标题和话题
