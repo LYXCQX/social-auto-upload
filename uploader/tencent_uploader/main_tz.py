@@ -92,11 +92,11 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None):
                         views_count = parse_view_count(views_count)
                         
                         # 获取视频标题用于日志
-                        title = await item.locator('.post-title').text_content()
+                        # title = await item.locator('.post-title').text_content()
                         
                         # 记录详细的比对信息
                         tencent_logger.info(f"[删除流程] 视频信息比对:")
-                        tencent_logger.info(f"[删除流程] - 标题: {title}")
+                        # tencent_logger.info(f"[删除流程] - 标题: {title}")
                         tencent_logger.info(f"[删除流程] - 发布时间: {post_time_str} ({time_diff:.0f}分钟前)")
                         tencent_logger.info(f"[删除流程] - 播放量: {views_count}")
                         tencent_logger.info(f"[删除流程] - 条件比对: 时间>{minutes_ago}分钟 且 播放量<{max_views}")
