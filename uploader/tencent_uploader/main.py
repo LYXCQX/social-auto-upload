@@ -501,9 +501,9 @@ class TencentVideo(object):
         while time.time() - start_time < timeout:
             try:
                 if page_index == 1:
-                    await search_activity_input.clear()
-                    await asyncio.sleep(2)
+                    # await search_activity_input.clear()
                     await search_activity_input.fill(search_title)
+                    await asyncio.sleep(2)
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
                 # 直接获取所有非禁用短剧项中的标题元素
