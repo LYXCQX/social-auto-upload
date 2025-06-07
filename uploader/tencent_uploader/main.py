@@ -486,6 +486,9 @@ class TencentVideo(object):
         search_title = search_name if search_name else playlet_title
         # 优先使用展示剧名进行匹配
         match_title = display_name if display_name else playlet_title
+        jishu = anchor_info.get("jishu", None)
+        if match_title == '十八岁太奶奶驾到，重整家族荣耀':
+            jishu = 47
         tencent_logger.info(f"开始添加短剧: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
         
         # 填充短剧名称
@@ -507,19 +510,24 @@ class TencentVideo(object):
                 await page.wait_for_selector('.drama-title', timeout=5000)
 
                 # 直接获取所有非禁用短剧项中的标题元素
-                drama_title_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-title').all()
+                drama_text_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-text').all()
                 
                 # 遍历所有短剧标题元素
-                for title_element in drama_title_elements:
+                for text_element in drama_text_elements:
+                    title_element = text_element.locator('.drama-title')
+                    extinfo = await text_element.locator('.extinfo').text_content()
                     # 获取标题文本
                     text_content = await title_element.text_content()
                     tencent_logger.info(f'找到短剧标题：{text_content}')
-                    
+
                     # 检查标题是否匹配
-                    if match_drama_name:
-                        have_platlet = match_title == text_content
+                    if not jishu or (jishu and str(jishu) in extinfo):
+                        if match_drama_name:
+                            have_platlet = match_title == text_content
+                        else:
+                            have_platlet = match_title in text_content
                     else:
-                        have_platlet = match_title in text_content
+                        have_platlet = False
                     if have_platlet:
                         await title_element.evaluate('el => el.click()')
                         tencent_logger.info(f'点击了匹配【{match_title}】的短剧')
