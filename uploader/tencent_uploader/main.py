@@ -1,22 +1,23 @@
 # -*- coding: utf-8 -*-
+import asyncio
+import json
+import os
 import time
-from datetime import datetime
-from typing import Tuple
 import uuid
+from datetime import datetime
 
 import loguru
+from config import PLATFORM
+from config_manager import ConfigManager
 from playwright.async_api import Playwright, async_playwright
-import os
-import asyncio
-
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TENCENT
 from social_auto_upload.utils.bus_exception import UpdateError
 from social_auto_upload.utils.file_util import get_account_file
-from social_auto_upload.utils.files_times import get_absolute_path
 from social_auto_upload.utils.log import tencent_logger
 
-
+config = ConfigManager()
+pub_config = json.loads(config.get(f'{PLATFORM}_pub_config',"{}")).get('tencent',{})
 def format_str_for_short_title(origin_title: str) -> str:
     # 定义允许的特殊字符
     allowed_special_chars = "《》""+?%°"
@@ -202,7 +203,7 @@ class TencentVideo(object):
         tencent_logger.info("视频出错了，重新上传中")
         await page.locator('div.media-status-content div.tag-inner:has-text("删除")').click()
         await page.get_by_role('button', name="删除", exact=True).click()
-        file_input = page.locator('input[type="file"]')
+        file_input = page.locator(pub_config.get('up_file'))
         await file_input.set_input_files(self.file_path)
 
     async def add_activity(self, page):
@@ -230,10 +231,11 @@ class TencentVideo(object):
         match_drama_name = anchor_info.get("match_drama_name", None)
         playlet_title_tag = anchor_info.get("playlet_title_tag", None)
         tencent_logger.info(f"开始添加活动: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
-
+        active_hd = pub_config.get('active_hd')
+        print(active_hd)
         # 等待包含"活动"标签的form-item出现
-        await page.wait_for_selector('.form-item:has(.label:text("活动"))', state="visible", timeout=5000)
-        form_item = page.locator('.form-item:has(.label:text("活动"))')
+        await page.wait_for_selector(active_hd, state="visible", timeout=5000)
+        form_item = page.locator(active_hd)
 
         # 查找并点击"不参与活动"按钮
         no_activity_span = form_item.locator("span:has-text('不参与活动'):visible")
@@ -242,7 +244,7 @@ class TencentVideo(object):
             tencent_logger.info("已点击不参与活动")
 
         # 等待活动列表加载
-        await page.wait_for_selector('.form-item:has(.label:text("活动")) .common-option-list-wrap', state="visible", timeout=5000)
+        await page.wait_for_selector(f"{active_hd} .common-option-list-wrap", state="visible", timeout=5000)
         search_activity_input = form_item.locator('input[placeholder="搜索活动"]')
         # 使用搜索剧名填充活动搜索框
         await search_activity_input.fill(search_title)
@@ -313,7 +315,7 @@ class TencentVideo(object):
             # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
             await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
             # await page.wait_for_selector('input[type="file"]', timeout=10000)
-            file_input = page.locator('input[type="file"]')
+            file_input = page.locator(pub_config.get('up_file'))
             await file_input.set_input_files(self.file_path)
             # 添加商品
             # await self.add_product(page)
@@ -407,17 +409,17 @@ class TencentVideo(object):
                     tencent_logger.info("[删除流程] 刷新页面")
                     await page.reload()
                     await asyncio.sleep(1)  # 等待页面加载
-
+                    video_list = pub_config.get('video_list')
                     try:
                         tencent_logger.info("[删除流程] 等待视频列表加载")
-                        await page.wait_for_selector('.post-feed-item', timeout=10000)
+                        await page.wait_for_selector(video_list, timeout=10000)
                     except Exception as e:
                         tencent_logger.error(f"[删除流程] 等待视频列表加载超时，未找到 post-feed-item 元素: {str(e)}")
                         return
 
                     found_video = False
                     # 获取所有视频项
-                    feed_items = await page.locator('.post-feed-item').all()
+                    feed_items = await page.locator(video_list).all()
                     if not feed_items:
                         tencent_logger.warning("[删除流程] 未找到任何视频项")
                         break
@@ -458,8 +460,10 @@ class TencentVideo(object):
 
     async def add_short_play_by_baobai(self, page):
         # 等待并点击"选择链接"按钮
-        await page.wait_for_selector(':text-is("选择链接")', state='visible', timeout=5000)
-        await page.click(':text-is("选择链接")')
+        baobai_lj = pub_config.get('baobai_lj')
+        print(baobai_lj)
+        await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
+        await page.click(baobai_lj)
         # 等待并点击"短剧"选项，使用精确匹配
         await page.wait_for_selector(':text-is("短剧")', state='visible', timeout=5000)
         await page.click(':text-is("短剧")')
@@ -487,8 +491,6 @@ class TencentVideo(object):
         # 优先使用展示剧名进行匹配
         match_title = display_name if display_name else playlet_title
         jishu = anchor_info.get("jishu", None)
-        if match_title == '十八岁太奶奶驾到，重整家族荣耀':
-            jishu = 47
         tencent_logger.info(f"开始添加短剧: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
         
         # 填充短剧名称
@@ -530,7 +532,7 @@ class TencentVideo(object):
                         have_platlet = False
                     if have_platlet:
                         await title_element.evaluate('el => el.click()')
-                        tencent_logger.info(f'点击了匹配【{match_title}】的短剧')
+                        tencent_logger.info(f'点击了匹配【{match_title}】的{jishu}短剧')
                         found = True
                         break
 
@@ -604,7 +606,8 @@ class TencentVideo(object):
                         tencent_logger.warning("  [-] 未找到可见的不保存按钮")
                     
                 tencent_logger.info("  [-] 尝试点击发布按钮...")
-                publish_buttion = page.locator('div.form-btns button:has-text("发表")')
+                up_button = pub_config.get('up_button')
+                publish_buttion = page.locator(up_button)
                 if await publish_buttion.count():
                     await publish_buttion.click()
                     tencent_logger.info("  [-] 已点击发布按钮")

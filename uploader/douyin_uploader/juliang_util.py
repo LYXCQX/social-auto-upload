@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import json
 import os
 import time
 
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright
-from social_auto_upload.utils.log import douyin_logger
-from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.base_social_media import set_init_script
+from social_auto_upload.utils.log import douyin_logger
 
 load_dotenv()
 
@@ -132,7 +130,7 @@ async def juliang_cookie_gen(account_file, local_executable_path=None):
         await context.close()
         await browser.close()
         return user_id, user_name, douyin_id
-async def xt_have_task(page, playlet_title):
+async def xt_have_task(page, playlet_title,pub_config):
     await page.goto("https://www.xingtu.cn/sup/creator/user/task")
     await page.wait_for_url("https://www.xingtu.cn/sup/creator/user/task*")
 
@@ -145,7 +143,8 @@ async def xt_have_task(page, playlet_title):
         pass
 
     await page.click('text="进行中"')
-    search_input = page.locator('input[placeholder="请输入任务ID/名称"]')
+    xt_search_rw = pub_config.get('xt_search_rw')
+    search_input = page.locator(xt_search_rw)
     await search_input.fill(playlet_title)
     await page.keyboard.press('Enter')
     await page.wait_for_timeout(2000)  # 等待搜索结果加载

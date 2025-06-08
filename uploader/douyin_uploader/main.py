@@ -1,25 +1,19 @@
 # -*- coding: utf-8 -*-
-import logging
+import asyncio
+import os
 import time
 from datetime import datetime
-from typing import Tuple, Any
+from typing import Any
 
 import loguru
-from playwright.async_api import Playwright, async_playwright, Page
-import os
-import asyncio
 from dotenv import load_dotenv
-import json
-
+from playwright.async_api import Playwright, async_playwright, Page
 from social_auto_upload.conf import LOCAL_CHROME_PATH
+from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_have_task
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_DOUYIN
+from social_auto_upload.utils.bus_exception import UpdateError, BusError
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
-
-from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_have_task
-
-from social_auto_upload.utils.bus_exception import UpdateError,BusError
-
 
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
@@ -27,6 +21,13 @@ load_dotenv()
 # failure_messages = json.loads(failure_messages_json)
 
 
+from config import PLATFORM
+from config_manager import ConfigManager
+
+import json
+
+config = ConfigManager()
+pub_config = json.loads(config.get(f'{PLATFORM}_pub_config',"{}")).get('douyin',{})
 async def cookie_auth(account_file, local_executable_path=None,un_close=False):
     if not local_executable_path or not os.path.exists(local_executable_path):
         douyin_logger.warning(f"浏览器路径无效: {local_executable_path}")
@@ -217,7 +218,7 @@ class DouYinVideo(object):
             if self.info.get('use_xt'):
                 try:
                     # 创建一个浏览器上下文，使用指定的 cookie 文件
-                    have_task, page = await xt_have_task(page, playlet_title)
+                    have_task, page = await xt_have_task(page, playlet_title,pub_config)
                     if not have_task:
                         if auto_order:
                             douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
@@ -261,9 +262,9 @@ class DouYinVideo(object):
                     if text_exists:
                         break
                 break
-
+        up_file = pub_config.get('up_file')
         # 点击 "上传视频" 按钮
-        await page.locator("div[class^='container'] input").set_input_files(self.file_path)
+        await page.locator(up_file).set_input_files(self.file_path)
 
         # 等待页面跳转到指定的 URL 2025.01.08修改在原有基础上兼容两种页面
         while True:
