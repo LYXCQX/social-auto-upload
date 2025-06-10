@@ -114,8 +114,8 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None):
                             # 执行删除
                             delete_button = item.locator('text=删除')
                             if await delete_button.count() > 0:
-                                tencent_logger.info(
-                                    f"[删除流程] 找到符合条件的视频，准备删除{await item.locator('.post-title').text_content()}")
+                                # tencent_logger.info(
+                                #     f"[删除流程] 找到符合条件的视频，准备删除{await item.locator('.post-title').text_content()}")
                                 await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
                                 await page.click(':text-is("确定")')
                                 deleted_count += 1
