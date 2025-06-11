@@ -232,7 +232,6 @@ class TencentVideo(object):
         playlet_title_tag = anchor_info.get("playlet_title_tag", None)
         tencent_logger.info(f"开始添加活动: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
         active_hd = pub_config.get('active_hd')
-        print(active_hd)
         # 等待包含"活动"标签的form-item出现
         await page.wait_for_selector(active_hd, state="visible", timeout=5000)
         form_item = page.locator(active_hd)
@@ -461,7 +460,6 @@ class TencentVideo(object):
     async def add_short_play_by_baobai(self, page):
         # 等待并点击"选择链接"按钮
         baobai_lj = pub_config.get('baobai_lj')
-        print(baobai_lj)
         await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
         await page.click(baobai_lj)
         # 等待并点击"短剧"选项，使用精确匹配
