@@ -580,7 +580,7 @@ class TencentVideo(object):
                 # 检查是否超时
                 if time.time() - start_time > timeout:
                     tencent_logger.warning("  [-] 发布操作超过两分钟，强制结束")
-                    break
+                    raise UpdateError(f"发布操作超过两分钟，强制结束{self.file_path}")
                 
                 await asyncio.sleep(10)
                 tencent_logger.info("  [-] 开始检查编辑保留提示框...")
@@ -612,6 +612,8 @@ class TencentVideo(object):
                 await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=1500)
                 tencent_logger.success("  [-]视频发布成功")
                 break
+            except UpdateError as e:
+                raise e
             except Exception as e:
                 if 'Target page, context or browser has been closed' in e.message:
                     raise e  # 直接抛出异常
