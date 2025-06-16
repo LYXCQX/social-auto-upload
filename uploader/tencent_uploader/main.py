@@ -5,6 +5,7 @@ import os
 import time
 import uuid
 from datetime import datetime
+import re
 
 import loguru
 from config import PLATFORM
@@ -267,10 +268,22 @@ class TencentVideo(object):
             creator_name = await element.locator('.creator-name').text_content()
             # 去除当前活动标题中的标点符号
             tencent_logger.info(f'已找到活动：{name}--需要匹配活动：{match_title}')
-            if match_drama_name:
-               have_platlet = match_title.strip() == name.strip()
-            else:
-                have_platlet = match_title.strip() in name.strip()
+            
+            # 提取书名号中的内容和推广前的内容
+            book_title = re.search(r'《(.*?)》', name)
+            promotion_title = re.search(r'》(.*?)推广', name)
+            
+            if book_title:
+                book_content = book_title.group(1)
+                promotion_content = promotion_title.group(1).strip()
+                tencent_logger.info(f'提取的活动名称：书名号内容={book_content}, 推广前内容={promotion_content}')
+                
+                if match_drama_name:
+                    have_platlet = match_title.strip() == book_content.strip()
+                else:
+                    have_platlet = match_title.strip() in book_content.strip()
+            # else:
+                # have_platlet = False
             if have_platlet:
                 if playlet_title_tag:
                     if playlet_title_tag not in creator_name:
