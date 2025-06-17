@@ -228,7 +228,7 @@ class DouYinVideo(object):
                             raise UpdateError(f"没有找到任务标签:{playlet_title}，也没有开启自动接单，请先接取任务")
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
-                    have_task, page, n_url = await self.click_go_to_upload(have_task, page)
+                    # have_task, page, n_url = await self.click_go_to_upload(have_task, page)
                 finally:
                     await context.storage_state(path=self.account_file)  # 保存cookie
                     douyin_logger.success('  星图cookie更新完毕！')
@@ -412,15 +412,17 @@ class DouYinVideo(object):
 
 
     async def xt_click_plate(self, page, playlet_title):
+        await asyncio.sleep(3)
+        await page.click('text="投稿任务"')
         # 等待并点击行业标签
-        await page.wait_for_selector('span:text("行业：")', timeout=10000)
-        await page.locator('span:text("行业：")').click()
+        # await page.wait_for_selector('span:text("行业：")', timeout=10000)
+        # await page.locator('span:text("行业：")').click()
         
         # 选择短剧选项
-        await page.wait_for_selector('.xt-cascader-panel input', state='visible')
-        await page.locator('.xt-cascader-panel input').fill('短剧')
-        await page.wait_for_selector('.xt-cascader-panel .xt-option__content')
-        await page.locator('.xt-cascader-panel .xt-option__content').first.click()
+        # await page.wait_for_selector('.xt-cascader-panel input', state='visible')
+        # await page.locator('.xt-cascader-panel input').fill('短剧')
+        # await page.wait_for_selector('.xt-cascader-panel .xt-option__content')
+        # await page.locator('.xt-cascader-panel .xt-option__content').first.click()
         
         search_input = page.locator('input[placeholder="请输入任务名称/ID"]')
         await search_input.fill(playlet_title)
@@ -456,6 +458,7 @@ class DouYinVideo(object):
                         max_amount = total_rate
                         max_card = card
                 except:
+                    douyin_logger.error('计算佣金失败')
                     try:
                         # 方式二：查找总奖金金额
                         price_element = card.locator('.price-number')
@@ -466,6 +469,7 @@ class DouYinVideo(object):
                                 max_amount = price_value
                                 max_card = card
                     except:
+                        douyin_logger.error('计算佣金失败')
                         continue
             print(f'最大佣金为{max_amount}')
             print(max_amount > 0)
@@ -474,7 +478,9 @@ class DouYinVideo(object):
                 # 点击最大金额对应的任务卡片
                 douyin_logger.info(f"任务卡片 HTML: {await max_card.evaluate('element => element.outerHTML')}")
 
-                await max_card.locator('button:has-text("我要投稿"):visible').click()
+                tougao = max_card.locator('button:has-text("我要投稿"):visible')
+                print(f'ss  {await tougao.count()}')
+                await tougao.evaluate('el => el.click()')
                 douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
                 return
                 
@@ -595,10 +601,10 @@ class DouYinVideo(object):
             await self.click_button_with_timeout(page, 'span:text("确定")', "确定", confirm_box)
             douyin_logger.info('[+] 点击了确认弹窗的确定按钮')
 
-            async with page.expect_popup() as popup_info:
-                await self.click_button_with_timeout(page, selector='span:has-text("上传视频")', button_name="上传视频",force_click=True)
-            douyin_logger.info('[+] 点击了上传视频按钮')
-            page = await popup_info.value
+            # async with page.expect_popup() as popup_info:
+            #     await self.click_button_with_timeout(page, selector='span:has-text("上传视频")', button_name="上传视频",force_click=True)
+            # douyin_logger.info('[+] 点击了上传视频按钮')
+            # page = await popup_info.value
             return page
         else:
             # 检查是否存在 el-dialog__body 元素
@@ -640,7 +646,7 @@ class DouYinVideo(object):
         if have_task:
             # 点击"查看任务详情"按钮
             detail_button = page.locator('span:has-text("查看任务详情")')
-            await detail_button.click()
+            await detail_button.evaluate('el => el.click()')
             douyin_logger.info('[+] 点击了查看任务详情按钮')
             await page.wait_for_timeout(2000)  # 等待详情页面加载
             await self.get_title_tag(page)
