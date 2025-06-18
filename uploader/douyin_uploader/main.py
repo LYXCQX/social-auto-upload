@@ -478,7 +478,7 @@ class DouYinVideo(object):
                 # 点击最大金额对应的任务卡片
                 douyin_logger.info(f"任务卡片 HTML: {await max_card.evaluate('element => element.outerHTML')}")
 
-                tougao = max_card.locator('button:has-text("我要投稿"):visible')
+                tougao = max_card.locator('button:has-text("我要投稿"):visible, button:has-text("参与投稿"):visible')
                 print(f'ss  {await tougao.count()}')
                 await tougao.evaluate('el => el.click()')
                 douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
@@ -578,13 +578,13 @@ class DouYinVideo(object):
     # 点击投稿
     async def click_tougao(self, page):
         page = await page.wait_for_event('popup')
-        await page.wait_for_selector('span:text("我要投稿")', state='visible', timeout=10000)  # 等待按钮可见
+        await page.wait_for_selector('span:text("我要投稿"), span:text("参与投稿")', state='visible', timeout=10000)  # 等待按钮可见
         await self.get_title_tag(page)
         print('开始投稿了')
-        # 点击"我要投稿"按钮
+        # 点击"我要投稿"或"参与投稿"按钮
         start_time = time.time()
         while True:
-            submit_button = page.locator('span:text("我要投稿")')
+            submit_button = page.locator('span:text("我要投稿"), span:text("参与投稿")')
             if await submit_button.count() == 0:
                 submit_button = page.locator('span:text("预约投稿")')
             if await submit_button.count() > 0:
