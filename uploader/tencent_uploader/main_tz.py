@@ -25,7 +25,7 @@ async def delete_video(local_executable_path, account_file, minutes_ago, max_vie
         await browser.close()
 
 
-async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None):
+async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,page_index=0,video_title=None):
     """
     根据时间间隔和播放量条件删除视频
     :param page: 页面对象
@@ -37,7 +37,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None):
         tencent_logger.info("[删除流程] 未设置删除条件，跳过删除")
         return
 
-    tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views}")
+    tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 标题为{video_title} 且 页码为{page_index}")
     try:
         start_time = time.time()
         timeout = 300  # 5分钟超时
@@ -71,7 +71,9 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None):
 
             feed_count = len(feed_items)
             tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项")
-
+            current_page = 0
+            if page_index>0 and current_page >= page_index:
+                return
             deleted_count = 0
             current_index = 0
             while current_index < len(feed_items):
@@ -92,30 +94,38 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None):
                         views_count = parse_view_count(views_count)
                         
                         # 获取视频标题用于日志
-                        # title = await item.locator('.post-title').text_content()
+                        try:
+                            title = await item.locator('.post-title').text_content()
+                        except Exception as e:
+                            tencent_logger.error(f"[删除流程] 获取视频标题时出错: {str(e)}")
+                            title = ''
                         
                         # 记录详细的比对信息
                         tencent_logger.info(f"[删除流程] 视频信息比对:")
-                        # tencent_logger.info(f"[删除流程] - 标题: {title}")
+                        tencent_logger.info(f"[删除流程] - 标题: {title}")
                         tencent_logger.info(f"[删除流程] - 发布时间: {post_time_str} ({time_diff:.0f}分钟前)")
                         tencent_logger.info(f"[删除流程] - 播放量: {views_count}")
                         tencent_logger.info(f"[删除流程] - 条件比对: 时间>{minutes_ago}分钟 且 播放量<{max_views}")
                         tencent_logger.info(f"[删除流程] - 实际数据: {time_diff:.0f}>{minutes_ago} 且 {views_count}<{max_views}")
-
                         # 检查是否满足删除条件
                         should_delete = False
-                        if minutes_ago and time_diff > minutes_ago and max_views and views_count < max_views:
-                            should_delete = True
-                            tencent_logger.info(f"[删除流程] => 符合删除条件")
-                        else:
-                            tencent_logger.info(f"[删除流程] => 不符合删除条件")
+                        if video_title:
+                            if title.startswith(video_title) and  minutes_ago and time_diff >= minutes_ago and max_views and views_count < max_views:
+                                should_delete = True
+                                tencent_logger.info(f"[删除流程] => 符合删除条件")
+                        else :
+                            if  minutes_ago and time_diff >= minutes_ago and max_views and views_count < max_views:
+                                should_delete = True
+                                tencent_logger.info(f"[删除流程] => 符合删除条件")
+                            else:
+                                tencent_logger.info(f"[删除流程] => 不符合删除条件")
 
                         if should_delete:
                             # 执行删除
                             delete_button = item.locator('text=删除')
                             if await delete_button.count() > 0:
-                                # tencent_logger.info(
-                                #     f"[删除流程] 找到符合条件的视频，准备删除{await item.locator('.post-title').text_content()}")
+                                tencent_logger.info(
+                                    f"[删除流程] 找到符合条件的视频，准备删除{title}")
                                 await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
                                 await page.click(':text-is("确定")')
                                 deleted_count += 1
@@ -144,6 +154,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None):
                             await next_page.click()
                             await asyncio.sleep(2)  # 等待页面加载
                             page_reload = False
+                            current_page += 1
                             continue
                 except Exception as e:
                     tencent_logger.exception(f"[删除流程] 检查下一页按钮时出错：{str(e)}")

@@ -12,6 +12,7 @@ from config import PLATFORM
 from config_manager import ConfigManager
 from playwright.async_api import Playwright, async_playwright
 from social_auto_upload.conf import LOCAL_CHROME_PATH
+from social_auto_upload.uploader.tencent_uploader.main_tz import delete_videos_by_conditions
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TENCENT
 from social_auto_upload.utils.bus_exception import UpdateError
 from social_auto_upload.utils.file_util import get_account_file
@@ -438,10 +439,16 @@ class TencentVideo(object):
 
                     feed_count = len(feed_items)
                     tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项")
-
+                    
+                    # 检查所有项是否都包含effective-time
+                    all_have_effective_time = True
                     # 遍历所有视频项
                     for index, item in enumerate(feed_items):
                         try:
+                            effective_time = await item.locator('.effective-time').count()
+                            tencent_logger.info(f"[删除流程] 检查有效时间: {effective_time}")
+                            if effective_time == 0:
+                                all_have_effective_time = False
                             item_title = item.locator('.post-title')
                             if await item_title.count() > 0:
                                 title_text = await item_title.text_content()
@@ -459,6 +466,9 @@ class TencentVideo(object):
                         except Exception as e:
                             tencent_logger.exception(f"[删除流程] 处理视频项时出错：{str(e)}")
                             continue
+                    if all_have_effective_time:
+                        tencent_logger.info("[删除流程] 所有视频项都包含effective-time，调用批量删除方法")
+                        await delete_videos_by_conditions(page,0,10, page_index=5,video_title='waitdel-')
                     # 如果没有找到匹配的视频，说明删除完成
                     if not found_video:
                         if is_first_time:
@@ -772,7 +782,36 @@ class TencentVideo(object):
                     box = await scroll_container.bounding_box()
                     if box:
                         tencent_logger.info(f'找到滚动容器，位置: {box}')
-                        # 使用JavaScript执行滚动
+                        # 先滚动到底部
+                        await page.evaluate('''(container) => {
+                            if (container) {
+                                const prevHeight = container.scrollHeight;
+                                container.scrollTop = prevHeight;
+                                return { success: true, prevHeight: prevHeight };
+                            }
+                            return { success: false };
+                        }''', await scroll_container.element_handle())
+                        tencent_logger.info('已执行滚动到底部操作')
+                        
+                        # 等待一下让内容加载
+                        await asyncio.sleep(0.5)
+                        
+                        # 先向上滚动一段距离
+                        await page.evaluate('''(container) => {
+                            if (container) {
+                                const currentScrollTop = container.scrollTop;
+                                // 向上滚动约1/3的容器高度
+                                container.scrollTop = Math.max(0, currentScrollTop - container.clientHeight / 3);
+                                return { success: true, scrolledTo: container.scrollTop };
+                            }
+                            return { success: false };
+                        }''', await scroll_container.element_handle())
+                        tencent_logger.info('已执行向上滚动操作')
+                        
+                        # 再次等待
+                        await asyncio.sleep(0.3)
+                        
+                        # 再次滚动到底部以触发更新
                         await page.evaluate('''(container) => {
                             if (container) {
                                 const prevHeight = container.scrollHeight;
@@ -787,7 +826,7 @@ class TencentVideo(object):
                             }
                             return { success: false };
                         }''', await scroll_container.element_handle())
-                        tencent_logger.info('已执行滚动操作')
+                        tencent_logger.info('已再次执行滚动到底部操作')
                     else:
                         tencent_logger.warning('找到滚动容器但无法获取位置信息')
                 else:
