@@ -228,7 +228,7 @@ class DouYinVideo(object):
                             raise UpdateError(f"没有找到任务标签:{playlet_title}，也没有开启自动接单，请先接取任务")
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
-                    # have_task, page, n_url = await self.click_go_to_upload(have_task, page)
+                        have_task, page, n_url = await self.click_go_to_upload(have_task, page)
                 finally:
                     await context.storage_state(path=self.account_file)  # 保存cookie
                     douyin_logger.success('  星图cookie更新完毕！')

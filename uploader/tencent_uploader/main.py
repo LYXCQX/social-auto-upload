@@ -587,13 +587,13 @@ class TencentVideo(object):
             tencent_logger.error(f'超时{timeout}秒，未找到匹配【{match_title}】的短剧')
             raise UpdateError(f"未找到匹配的短剧：{match_title}")
 
-    async def add_short_title(self, page):
-        short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
-            "xpath=following-sibling::div").locator(
-            'span input[type="text"]')
-        if await short_title_element.count():
-            short_title = format_str_for_short_title(self.title)
-            await short_title_element.fill(short_title)
+    # async def add_short_title(self, page):
+    #     short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
+    #         "xpath=following-sibling::div").locator(
+    #         'span input[type="text"]')
+    #     if await short_title_element.count():
+    #         short_title = format_str_for_short_title(self.title)
+    #         await short_title_element.fill(short_title)
 
     async def click_publish(self, page):
         start_time = time.time()
