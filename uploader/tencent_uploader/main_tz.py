@@ -42,6 +42,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
         start_time = time.time()
         timeout = 300  # 5分钟超时
         page_reload = True
+        current_page = 0
         while True:
             current_time = time.time()
             elapsed = current_time - start_time
@@ -70,9 +71,8 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                 break
 
             feed_count = len(feed_items)
-            tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项")
-            current_page = 0
-            if page_index>0 and current_page >= page_index:
+            tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项 current_page ={current_page}")
+            if 0 < page_index <= current_page:
                 return
             deleted_count = 0
             current_index = 0
@@ -110,11 +110,11 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                         # 检查是否满足删除条件
                         should_delete = False
                         if video_title:
-                            if title.startswith(video_title) and  minutes_ago and time_diff >= minutes_ago and max_views and views_count < max_views:
+                            if title.startswith(video_title) and  minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and views_count < max_views:
                                 should_delete = True
                                 tencent_logger.info(f"[删除流程] => 符合删除条件")
                         else :
-                            if  minutes_ago and time_diff >= minutes_ago and max_views and views_count < max_views:
+                            if  minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and views_count < max_views:
                                 should_delete = True
                                 tencent_logger.info(f"[删除流程] => 符合删除条件")
                             else:
