@@ -275,10 +275,10 @@ class KSVideo(object):
         search_input = page.locator(product_selector).locator("..").locator('.ant-select-selection-search-input')
         await search_input.type(str(self.goods.relItemId))
         await page.wait_for_selector('.rc-virtual-list', state='visible', timeout=5000)
-        
+
         # 获取所有商品标题元素
         goods_titles = await page.locator('.rc-virtual-list [class^="_goods-title"]').all()
-        
+
         # 遍历所有标题，找到匹配的商品并点击
         for title_element in goods_titles:
             title_text = await title_element.text_content()
@@ -290,7 +290,7 @@ class KSVideo(object):
             title_text = await title_element.text_content()
             if title_text.strip() == str(self.goods.itemTitle).strip():
                 await title_element.click()
-                return  
+                return
         # 如果没有找到匹配的商品，按回车选择第一个
         await page.keyboard.press("Enter")
-        
+

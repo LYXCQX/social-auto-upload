@@ -48,7 +48,7 @@ async def cookie_auth(account_file, local_executable_path=None,un_close=False):
             await browser.close()
             return False
         # 2024.06.17 抖音创作者中心改版
-        if await page.get_by_text('手机号登录').count():
+        if await page.get_by_text('手机号登录').count() or await page.get_by_text('扫码登录').count():
             print("[+] 等待5秒 cookie 失效")
             return False
         else:
@@ -271,7 +271,7 @@ class DouYinVideo(object):
             try:
                 # 尝试等待第一个 URL
                 await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/publish*", timeout=3)
+                    "https://creator.douyin.com/creator-micro/content/publish*", timeout=3000)
                 douyin_logger.info("[+] 成功进入version_1发布页面!")
                 break  # 成功进入页面后跳出循环
             except Exception:
@@ -279,7 +279,7 @@ class DouYinVideo(object):
                     # 如果第一个 URL 超时，再尝试等待第二个 URL
                     await page.wait_for_url(
                         "https://creator.douyin.com/creator-micro/content/post/video*",
-                        timeout=3)
+                        timeout=3000)
                     douyin_logger.info("[+] 成功进入version_2发布页面!")
 
                     break  # 成功进入页面后跳出循环
@@ -417,18 +417,18 @@ class DouYinVideo(object):
         # 等待并点击行业标签
         # await page.wait_for_selector('span:text("行业：")', timeout=10000)
         # await page.locator('span:text("行业：")').click()
-        
+
         # 选择短剧选项
         # await page.wait_for_selector('.xt-cascader-panel input', state='visible')
         # await page.locator('.xt-cascader-panel input').fill('短剧')
         # await page.wait_for_selector('.xt-cascader-panel .xt-option__content')
         # await page.locator('.xt-cascader-panel .xt-option__content').first.click()
-        
+
         search_input = page.locator('input[placeholder="请输入任务名称/ID"]')
         await search_input.fill(playlet_title)
         await page.keyboard.press('Enter')
         await page.wait_for_timeout(2000)  # 等待搜索结果加载
-        
+
         # 查找所有百分比元素
         percent_elements = page.locator('.content .task-list .author-market-task-card')
         # 打印每个元素的HTML内容
@@ -453,7 +453,7 @@ class DouYinVideo(object):
                         rate_text = await rates.nth(j).text_content()
                         rate_value = float(rate_text.strip('%'))
                         total_rate += rate_value
-                        
+
                     if total_rate > max_amount:
                         max_amount = total_rate
                         max_card = card
@@ -483,14 +483,14 @@ class DouYinVideo(object):
                 await tougao.evaluate('el => el.click()')
                 douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
                 return
-                
+
         # 如果上面的方式都没找到，尝试直接查找"我要投稿"按钮
         # submit_button = page.locator('span:text("我要投稿")')
         # if await submit_button.count() > 0:
         #     await submit_button.click()
         #     douyin_logger.info('[+] 直接点击了"我要投稿"按钮')
         #     return
-            
+
         raise UpdateError(f"没有找到任务标签:{playlet_title}，可能还没接取该任务，请先接取任务")
 
     async def click_button_with_timeout(self, page, selector, button_name, parent_dom=None, timeout=30, force_click=False):
@@ -836,7 +836,7 @@ class DouYinVideo(object):
                     tag = tag.strip()
                     if not tag:  # 跳过空标签
                         continue
-                        
+
                     tag_text = tag if tag.startswith('#') else f'#{tag}'
                     await page.type(css_selector, tag_text)
                     await page.press(css_selector, "Space")

@@ -98,7 +98,8 @@ platform_loggers = {
     'bilibili': 'bilibili',
     'toutiao': 'toutiao',
     'tencent': 'tencent',
-    'baijiahao': 'baijiahao'
+    'baijiahao': 'baijiahao',
+    'xiaohongshu': 'xiaohongshu'
 }
 
 # 创建所有平台的日志记录器，但只启用当前平台的日志文件

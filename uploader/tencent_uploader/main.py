@@ -219,17 +219,17 @@ class TencentVideo(object):
         # 获取展示剧名和搜索剧名
         display_name = anchor_info.get("display_name", None)
         search_name = anchor_info.get("search_name", None)
-        
+
         # 如果没有设置专门的搜索剧名和展示剧名，则使用旧逻辑的剧名
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
             return
-            
+
         # 优先使用搜索剧名进行搜索
         search_title = search_name if search_name else playlet_title
         # 优先使用展示剧名进行匹配
         match_title = display_name if display_name else playlet_title
-        
+
         match_drama_name = anchor_info.get("match_drama_name", None)
         playlet_title_tag = anchor_info.get("playlet_title_tag", None)
         tencent_logger.info(f"开始添加活动: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
@@ -259,7 +259,7 @@ class TencentVideo(object):
             if time.time() - start_time > 5:  # 5秒超时
                 raise UpdateError(f"没有找到该短剧任务{search_title}")
             await asyncio.sleep(0.5)
-            
+
         found = False
 
         for element in activity_elements:
@@ -269,16 +269,16 @@ class TencentVideo(object):
             creator_name = await element.locator('.creator-name').text_content()
             # 去除当前活动标题中的标点符号
             tencent_logger.info(f'已找到活动：{name}--需要匹配活动：{match_title}')
-            
+
             # 提取书名号中的内容和推广前的内容
             book_title = re.search(r'《(.*?)》', name)
             promotion_title = re.search(r'》(.*?)推广', name)
-            
+
             if book_title:
                 book_content = book_title.group(1)
                 promotion_content = promotion_title.group(1).strip()
                 tencent_logger.info(f'提取的活动名称：书名号内容={book_content}, 推广前内容={promotion_content}')
-                
+
                 if match_drama_name:
                     have_platlet = match_title.strip() == book_content.strip()
                 else:
@@ -293,14 +293,14 @@ class TencentVideo(object):
                 tencent_logger.info(f"成功添加活动: {match_title}")
                 found = True
                 break
-                
+
         if not found:
             raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{match_title}")
 
     async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(
-            headless=False, 
+            headless=False,
             executable_path=self.local_executable_path,
             args=['--mute-audio']  # 设置浏览器静音
         )
@@ -439,7 +439,7 @@ class TencentVideo(object):
 
                     feed_count = len(feed_items)
                     tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项")
-                    
+
                     # 检查所有项是否都包含effective-time
                     all_have_effective_time = True
                     # 遍历所有视频项
@@ -497,23 +497,23 @@ class TencentVideo(object):
         anchor_info = self.info.get("anchor_info", None)
         if not anchor_info:
             raise UpdateError(f"未找到挂剧参数：{anchor_info}")
-            
+
         # 获取展示剧名和搜索剧名
         display_name = anchor_info.get("display_name", None)
         search_name = anchor_info.get("search_name", None)
-        
+
         # 如果没有设置专门的搜索剧名和展示剧名，则使用旧逻辑的剧名
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
             raise UpdateError(f"未找到挂剧参数：{playlet_title}")
-            
+
         # 优先使用搜索剧名进行搜索
         search_title = search_name if search_name else playlet_title
         # 优先使用展示剧名进行匹配
         match_title = display_name if display_name else playlet_title
         jishu = anchor_info.get("jishu", None)
         tencent_logger.info(f"开始添加短剧: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
-        
+
         # 填充短剧名称
         # 设置开始时间和超时时间
         start_time = time.time()
@@ -534,7 +534,7 @@ class TencentVideo(object):
 
                 # 直接获取所有非禁用短剧项中的标题元素
                 drama_text_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-text').all()
-                
+
                 # 遍历所有短剧标题元素
                 for text_element in drama_text_elements:
                     title_element = text_element.locator('.drama-title')
@@ -561,7 +561,7 @@ class TencentVideo(object):
                     break
 
                 retry_count += 1
-                
+
                 # 如果循环3次还没找到，尝试翻页
                 if retry_count >= 3:
                     # 查找下一页按钮
@@ -604,20 +604,20 @@ class TencentVideo(object):
                 if time.time() - start_time > timeout:
                     tencent_logger.warning("  [-] 发布操作超过两分钟，强制结束")
                     raise UpdateError(f"发布操作超过两分钟，强制结束{self.file_path}")
-                
+
                 await asyncio.sleep(10)
                 tencent_logger.info("  [-] 开始检查编辑保留提示框...")
-                
+
                 # 检查是否出现"将此次编辑保留?"文本
                 has_edit_retain = await page.locator('div:has-text("将此次编辑保留?")').count() > 0
                 tencent_logger.info(f"  [-] 是否找到编辑保留提示框: {has_edit_retain}")
-                
+
                 if has_edit_retain:
                     # 查找并点击"不保存"按钮，直接校验可见性
                     no_save_button = page.locator('button:has-text("不保存"):visible')
                     has_no_save_button = await no_save_button.count() > 0
                     tencent_logger.info(f"  [-] 是否找到可见的不保存按钮: {has_no_save_button}")
-                    
+
                     if has_no_save_button:
                         await no_save_button.click()
                         await page.goto('https://channels.weixin.qq.com/platform/post/list')
@@ -625,7 +625,7 @@ class TencentVideo(object):
                         break
                     else:
                         tencent_logger.warning("  [-] 未找到可见的不保存按钮")
-                    
+
                 tencent_logger.info("  [-] 尝试点击发布按钮...")
                 up_button = pub_config.get('up_button')
                 publish_buttion = page.locator(up_button)
@@ -685,16 +685,16 @@ class TencentVideo(object):
 
     async def create_collection(self, page):
         await page.get_by_text("创建新合集").click()
-        
+
         # 等待输入框出现并可见
         await page.wait_for_selector('input[placeholder="有趣的合集标题更容易吸引粉丝"]', state="visible", timeout=5000)
         await page.fill('input[placeholder="有趣的合集标题更容易吸引粉丝"]', self.collection)
-        
+
         # 等待创建按钮可点击
         create_button = page.get_by_role("button", name="创建")
         await create_button.wait_for(state="visible", timeout=5000)
         await create_button.click()
-        
+
         # 等待成功提示对话框出现
         try:
             await page.wait_for_selector('.create-dialog-success-wrap button:has-text("我知道了")', state="visible", timeout=5000)
@@ -723,7 +723,7 @@ class TencentVideo(object):
     async def add_collection(self, page):
         if not self.collection:
             return
-            
+
         await page.click(':text-is("选择合集")')
 
         # 等待合集列表容器可见
@@ -745,18 +745,18 @@ class TencentVideo(object):
 
         found = False
         last_count = 0
-        
+
         while not found:
             # 获取当前所有合集元素
             collection_elements = await page.locator('.option-list-wrap').locator('.option-item .item:not(:has-text("创建新合集"))').all()
             current_count = len(collection_elements)
             tencent_logger.info(f'当前找到 {current_count} 个合集')
-            
+
             # 如果数量没有增加,说明已经到底了
             if current_count == last_count:
                 tencent_logger.info('合集数量未增加，可能已到底部')
                 break
-                
+
             # 查找匹配的合集
             for element in collection_elements:
                 text = await element.locator('.name').text_content()
@@ -767,13 +767,13 @@ class TencentVideo(object):
                     tencent_logger.info(f"成功选择合集: {self.collection}")
                     found = True
                     break
-                    
+
             if found:
                 break
-                
+
             # 记录当前数量
             last_count = current_count
-            
+
             try:
                 # 使用Playwright定位器找到滚动容器
                 scroll_container = page.locator('div.common-option-list-wrap.option-list-wrap')
@@ -792,10 +792,10 @@ class TencentVideo(object):
                             return { success: false };
                         }''', await scroll_container.element_handle())
                         tencent_logger.info('已执行滚动到底部操作')
-                        
+
                         # 等待一下让内容加载
                         await asyncio.sleep(0.5)
-                        
+
                         # 先向上滚动一段距离
                         await page.evaluate('''(container) => {
                             if (container) {
@@ -807,10 +807,10 @@ class TencentVideo(object):
                             return { success: false };
                         }''', await scroll_container.element_handle())
                         tencent_logger.info('已执行向上滚动操作')
-                        
+
                         # 再次等待
                         await asyncio.sleep(0.3)
-                        
+
                         # 再次滚动到底部以触发更新
                         await page.evaluate('''(container) => {
                             if (container) {
@@ -833,10 +833,10 @@ class TencentVideo(object):
                     tencent_logger.warning('未找到滚动容器')
             except Exception as e:
                 tencent_logger.exception(f'滚动操作出错: {str(e)}')
-            
+
             # 等待新内容加载
             await asyncio.sleep(1)
-            
+
         return found
 
     async def add_original(self, page):
