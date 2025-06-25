@@ -19,7 +19,9 @@ from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import tencent_logger
 
 config = ConfigManager()
-pub_config = json.loads(config.get(f'{PLATFORM}_pub_config',"{}")).get('tencent',{})
+pub_config = json.loads(config.get(f'{PLATFORM}_pub_config', "{}")).get('tencent', {})
+
+
 def format_str_for_short_title(origin_title: str) -> str:
     # 定义允许的特殊字符
     allowed_special_chars = "《》""+?%°"
@@ -40,9 +42,10 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
-async def cookie_auth(account_file,local_executable_path=None,un_close=False):
+async def cookie_auth(account_file, local_executable_path=None, un_close=False):
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=False if un_close else True, executable_path=local_executable_path)
+        browser = await playwright.chromium.launch(headless=False if un_close else True,
+                                                   executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context)
         # 创建一个新的页面
@@ -119,7 +122,7 @@ async def get_tencent_cookie(account_file, local_executable_path=None):
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
-        return user_id,user_name
+        return user_id, user_name
 
 
 async def get_user_id(page):
@@ -140,7 +143,8 @@ async def get_user_id(page):
 
 async def weixin_setup(account_file, handle=False, local_executable_path=None):
     # account_file = get_absolute_path(account_file, "tencent_uploader")
-    if not os.path.exists(account_file) or not await cookie_auth(account_file, local_executable_path=local_executable_path):
+    if not os.path.exists(account_file) or not await cookie_auth(account_file,
+                                                                 local_executable_path=local_executable_path):
         if not handle:
             # Todo alert message
             return False, None, None
@@ -154,17 +158,19 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None):
 
 
 class TencentVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None, local_executable_path=None,info=None,collection=None,declare_original=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None,
+                 local_executable_path=None, info=None, collection=None, declare_original=None, proxy_setting=None):
         self.title = title[:999]  # 视频标题
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
         self.category = category
-        self.local_executable_path =  local_executable_path if local_executable_path else LOCAL_CHROME_PATH
-        self.info=info
-        self.collection=collection
-        self.declare_original= declare_original
+        self.local_executable_path = local_executable_path if local_executable_path else LOCAL_CHROME_PATH
+        self.info = info
+        self.collection = collection
+        self.declare_original = declare_original
+        self.proxy_setting = proxy_setting
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -284,7 +290,7 @@ class TencentVideo(object):
                 else:
                     have_platlet = match_title.strip() in book_content.strip()
             # else:
-                # have_platlet = False
+            # have_platlet = False
             if have_platlet:
                 if playlet_title_tag:
                     if playlet_title_tag not in creator_name:
@@ -302,6 +308,7 @@ class TencentVideo(object):
         browser = await playwright.chromium.launch(
             headless=False,
             executable_path=self.local_executable_path,
+            proxy=self.proxy_setting,
             args=['--mute-audio']  # 设置浏览器静音
         )
         # 创建一个浏览器上下文，使用指定的 cookie 文件
@@ -315,13 +322,20 @@ class TencentVideo(object):
         msg_res = '检测通过，暂未发现异常'
         # 创建一个新的页面
         page = await context.new_page()
+        # 动态获取屏幕尺寸
+        screen_size = await page.evaluate("""() => ({
+            width: window.screen.availWidth,
+            height: window.screen.availHeight
+        })""")
+
+        await page.set_viewport_size(screen_size)
         old_title = self.title
         upload_count = 1
         if self.info and "video_upload_count" in self.info:
             upload_count = max(1, int(self.info.get("video_upload_count", 1)))  # 确保至少上传1次
             tencent_logger.info(f'[+]计划上传 {upload_count} 次 -------{self.title}.mp4')
         for i in range(upload_count):
-            tencent_logger.info(f'[+]正在进行第 {i+1}/{upload_count} 次上传 -------{self.title}.mp4')
+            tencent_logger.info(f'[+]正在进行第 {i + 1}/{upload_count} 次上传 -------{self.title}.mp4')
             # 访问指定的 URL
             await page.goto("https://channels.weixin.qq.com/platform/post/create")
             tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
@@ -344,7 +358,8 @@ class TencentVideo(object):
                 await self.add_original(page)
             except:
                 tencent_logger.exception('添加原创失败，不影响执行')
-            should_delete = self.info and self.info.get("delete_platform_video", False) and (upload_count==1 or i < upload_count-1)
+            should_delete = self.info and self.info.get("delete_platform_video", False) and (
+                        upload_count == 1 or i < upload_count - 1)
             if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
                 self.title = f"waitdel-{random_uuid} {self.title}"
@@ -457,7 +472,8 @@ class TencentVideo(object):
                                     delete_button = item.locator('text=删除')
                                     if await delete_button.count() > 0:
                                         tencent_logger.info(f"[删除流程] 找到删除按钮，准备删除视频")
-                                        await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+                                        await delete_button.locator('..').locator('.opr-item').evaluate(
+                                            'el => el.click()')
                                         await page.click(':text-is("确定")')
                                         found_video = True
                                         is_first_time = True
@@ -468,7 +484,7 @@ class TencentVideo(object):
                             continue
                     if all_have_effective_time:
                         tencent_logger.info("[删除流程] 所有视频项都包含effective-time，调用批量删除方法")
-                        await delete_videos_by_conditions(page,0,10, page_index=5,video_title='waitdel-')
+                        await delete_videos_by_conditions(page, 0, 10, page_index=5, video_title='waitdel-')
                     # 如果没有找到匹配的视频，说明删除完成
                     if not found_video:
                         if is_first_time:
@@ -682,7 +698,6 @@ class TencentVideo(object):
             await page.keyboard.press("Space")
         tencent_logger.info(f"成功添加hashtag: {len(self.tags)}")
 
-
     async def create_collection(self, page):
         await page.get_by_text("创建新合集").click()
 
@@ -697,7 +712,8 @@ class TencentVideo(object):
 
         # 等待成功提示对话框出现
         try:
-            await page.wait_for_selector('.create-dialog-success-wrap button:has-text("我知道了")', state="visible", timeout=5000)
+            await page.wait_for_selector('.create-dialog-success-wrap button:has-text("我知道了")', state="visible",
+                                         timeout=5000)
             # 等待"我知道了"按钮可点击
             await page.locator('.create-dialog-success-wrap button:has-text("我知道了")').click()
         except:
@@ -735,7 +751,8 @@ class TencentVideo(object):
         # 等待合集列表加载完成
         start_time = time.time()
         while True:
-            collection_elements = await page.locator('.option-list-wrap').locator('.option-item .item:not(:has-text("创建新合集"))').all()
+            collection_elements = await page.locator('.option-list-wrap').locator(
+                '.option-item .item:not(:has-text("创建新合集"))').all()
             if len(collection_elements) > 0:
                 break
             if time.time() - start_time > 5:  # 5秒超时
@@ -748,7 +765,8 @@ class TencentVideo(object):
 
         while not found:
             # 获取当前所有合集元素
-            collection_elements = await page.locator('.option-list-wrap').locator('.option-item .item:not(:has-text("创建新合集"))').all()
+            collection_elements = await page.locator('.option-list-wrap').locator(
+                '.option-item .item:not(:has-text("创建新合集"))').all()
             current_count = len(collection_elements)
             tencent_logger.info(f'当前找到 {current_count} 个合集')
 

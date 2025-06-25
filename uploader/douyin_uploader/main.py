@@ -157,7 +157,7 @@ async def douyin_cookie_gen(account_file,local_executable_path=None):
 
 class DouYinVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None,
-                 check_video=False, info=None, collection=None,local_executable_path =None):
+                 check_video=False, info=None, collection=None,local_executable_path =None,proxy_setting=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -170,6 +170,7 @@ class DouYinVideo(object):
         self.check_video = check_video
         self.info = info
         self.collection = collection
+        self.proxy_setting = proxy_setting
 
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -197,11 +198,13 @@ class DouYinVideo(object):
             browser = await playwright.chromium.launch(
                 headless=False,
                 executable_path=self.local_executable_path,
+                proxy=self.proxy_setting,
                 args=['--start-maximized']  # 添加启动参数以最大化窗口
             )
         else:
             browser = await playwright.chromium.launch(
                 headless=False,
+                proxy=self.proxy_setting,
                 args=['--start-maximized']  # 添加启动参数以最大化窗口
             )
 
@@ -210,6 +213,13 @@ class DouYinVideo(object):
         context = await set_init_script(context)
         # 创建一个新的页面
         page = await context.new_page()
+        # 动态获取屏幕尺寸
+        screen_size = await page.evaluate("""() => ({
+            width: window.screen.availWidth,
+            height: window.screen.availHeight
+        })""")
+
+        await page.set_viewport_size(screen_size)
         if self.info and self.info.get("anchor_info", None) and self.info.get("enable_drama", False):
             anchor_info = self.info.get("anchor_info", None)
             playlet_title = anchor_info.get("title", None)
