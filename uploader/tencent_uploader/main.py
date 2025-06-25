@@ -18,6 +18,8 @@ from social_auto_upload.utils.bus_exception import UpdateError
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import tencent_logger
 
+from src.publish.social_auto_upload.uploader.tencent_uploader.main_tz import add_original
+
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config', "{}")).get('tencent', {})
 
@@ -358,7 +360,7 @@ class TencentVideo(object):
             else:
                 tencent_logger.info('未选择挂剧')
             try:
-                await self.add_original(page)
+                await add_original(self, page)
             except:
                 tencent_logger.exception('添加原创失败，不影响执行')
             should_delete = self.info and self.info.get("delete_platform_video", False) and (
@@ -860,32 +862,6 @@ class TencentVideo(object):
 
         return found
 
-    async def add_original(self, page):
-        if not self.declare_original:
-            tencent_logger.info('未启用声明原创功能')
-            return
-        if await page.get_by_label("视频为原创").count():
-            await page.get_by_label("视频为原创").check()
-        # 检查 "我已阅读并同意 《视频号原创声明使用条款》" 元素是否存在
-        label_locator = await page.locator('label:has-text("我已阅读并同意 《视频号原创声明使用条款》")').is_visible()
-        if label_locator:
-            await page.get_by_label("我已阅读并同意 《视频号原创声明使用条款》").check()
-            await page.get_by_role("button", name="声明原创").click()
-        # 2023年11月20日 wechat更新: 可能新账号或者改版账号，出现新的选择页面
-        if await page.locator('div.label span:has-text("声明原创")').count() and self.category:
-            # 因处罚无法勾选原创，故先判断是否可用
-            if not await page.locator('div.declare-original-checkbox input.ant-checkbox-input').is_disabled():
-                await page.locator('div.declare-original-checkbox input.ant-checkbox-input').click()
-                if not await page.locator(
-                        'div.declare-original-dialog label.ant-checkbox-wrapper.ant-checkbox-wrapper-checked:visible').count():
-                    await page.locator('div.declare-original-dialog input.ant-checkbox-input:visible').click()
-            if await page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible').count():
-                await page.locator('div.form-content:visible').click()  # 下拉菜单
-                await page.locator(
-                    f'div.form-content:visible ul.weui-desktop-dropdown__list li.weui-desktop-dropdown__list-ele:has-text("{self.category}")').first.click()
-                await page.wait_for_timeout(1000)
-            if await page.locator('button:has-text("声明原创"):visible').count():
-                await page.locator('button:has-text("声明原创"):visible').click()
 
     async def main(self):
         async with async_playwright() as playwright:

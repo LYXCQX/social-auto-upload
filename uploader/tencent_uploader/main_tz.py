@@ -180,6 +180,34 @@ def parse_view_count(view_str):
         tencent_logger.error(f"[删除流程] 解析播放量出错：{str(e)}，原始值：{view_str}")
         return 0
 
+
+async def add_original(parent_, page):
+    if not parent_.declare_original:
+        tencent_logger.info('未启用声明原创功能')
+        return
+    if await page.get_by_label("视频为原创").count():
+        await page.get_by_label("视频为原创").check()
+    # 检查 "我已阅读并同意 《视频号原创声明使用条款》" 元素是否存在
+    label_locator = await page.locator('label:has-text("我已阅读并同意 《视频号原创声明使用条款》")').is_visible()
+    if label_locator:
+        await page.get_by_label("我已阅读并同意 《视频号原创声明使用条款》").check()
+        await page.get_by_role("button", name="声明原创").click()
+    # 2023年11月20日 wechat更新: 可能新账号或者改版账号，出现新的选择页面
+    if await page.locator('div.label span:has-text("声明原创")').count() and parent_.category:
+        # 因处罚无法勾选原创，故先判断是否可用
+        if not await page.locator('div.declare-original-checkbox input.ant-checkbox-input').is_disabled():
+            await page.locator('div.declare-original-checkbox input.ant-checkbox-input').click()
+            if not await page.locator(
+                    'div.declare-original-dialog label.ant-checkbox-wrapper.ant-checkbox-wrapper-checked:visible').count():
+                await page.locator('div.declare-original-dialog input.ant-checkbox-input:visible').click()
+        if await page.locator('div.original-type-form > div.form-label:has-text("原创类型"):visible').count():
+            await page.locator('div.form-content:visible').click()  # 下拉菜单
+            await page.locator(
+                f'div.form-content:visible ul.weui-desktop-dropdown__list li.weui-desktop-dropdown__list-ele:has-text("{parent_.category}")').first.click()
+            await page.wait_for_timeout(1000)
+        if await page.locator('button:has-text("声明原创"):visible').count():
+            await page.locator('button:has-text("声明原创"):visible').click()
+
 # def normalize_post_time(post_time: str) -> str:
 #     """标准化发布时间格式，便于比较"""
 #     tencent_logger.debug(f"开始标准化时间: {post_time}")
