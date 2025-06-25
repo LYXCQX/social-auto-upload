@@ -351,7 +351,10 @@ class TencentVideo(object):
                 if self.info.get("enable_baobai", False):
                     await self.add_short_play_by_baobai(page)
                 else:
-                    await self.add_activity(page)
+                    if 1 < upload_count != i + 1:
+                        continue
+                    else:
+                        await self.add_activity(page)
             else:
                 tencent_logger.info('未选择挂剧')
             try:

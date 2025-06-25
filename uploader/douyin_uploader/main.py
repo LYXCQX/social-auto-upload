@@ -661,7 +661,7 @@ class DouYinVideo(object):
             await page.wait_for_timeout(2000)  # 等待详情页面加载
             await self.get_title_tag(page)
             # 点击"上传视频"按钮
-            upload_button = page.locator('span:has-text("上传视频")')
+            upload_button = page.locator('span:text="上传视频"')
             if await upload_button.count() > 0:
                 # await upload_button.click(force=True)
                 async with page.expect_popup() as popup_info:
