@@ -582,7 +582,7 @@ class DouYinVideo(object):
         await search_input.fill(playlet_title)
         await page.keyboard.press('Enter')
         await page.wait_for_timeout(2000)  # 等待搜索结果加载
-        await self.click_playlet_video(page, playlet_title_tag, new_task=True)
+        dy_have_task,page=await self.click_playlet_video(page, playlet_title_tag, new_task=True)
         return await self.click_tougao(page)
 
     # 点击投稿
@@ -649,7 +649,7 @@ class DouYinVideo(object):
         await page.keyboard.press('Enter')
         douyin_logger.info(f'[+] 在进行中页面搜索任务: {playlet_title}')
         await page.wait_for_timeout(2000)  # 等待搜索结果加载
-        have_task = await self.click_playlet_video(page, playlet_title_tag, new_task=False)
+        have_task,page = await self.click_playlet_video(page, playlet_title_tag, new_task=False)
         return await self.click_go_to_upload(have_task, page)
 
     async def click_go_to_upload(self, have_task, page):
@@ -661,7 +661,7 @@ class DouYinVideo(object):
             await page.wait_for_timeout(2000)  # 等待详情页面加载
             await self.get_title_tag(page)
             # 点击"上传视频"按钮
-            upload_button = page.locator('span:text="上传视频"')
+            upload_button = page.locator('span:text("上传视频")')
             if await upload_button.count() > 0:
                 # await upload_button.click(force=True)
                 async with page.expect_popup() as popup_info:
@@ -715,14 +715,16 @@ class DouYinVideo(object):
                         max_index = i
 
                 # 点击最大百分比对应的标签
-                await percent_elements.nth(max_index).click()
+                async with page.expect_popup() as popup_info:
+                    await percent_elements.nth(max_index).evaluate('el => el.click()')
+                page = await popup_info.value
                 douyin_logger.info(f'[+] 选择了最高百分比的标签: {max_percent}%')
             else:
                 if new_task:
                     raise UpdateError(f"没有找到任务标签:{playlet_title_tag}，可能还没接取该任务，请先接取任务")
                 else:
-                    return False
-        return True
+                    return False,page
+        return True,page
 
     async def add_goods(self, page):
         if self.goods:
