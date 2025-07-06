@@ -390,7 +390,9 @@ class TencentVideo(object):
             tencent_logger.success('  [-]cookie更新完毕！')
             if should_delete:
                 await self.delete_video(page)
-        # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
+        if self.info and self.info.get("delete_after_play", False):
+            await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=5)
+            # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
