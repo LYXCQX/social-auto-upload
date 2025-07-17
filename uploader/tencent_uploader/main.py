@@ -509,8 +509,8 @@ class TencentVideo(object):
         await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
         await page.click(baobai_lj)
         # 等待并点击"短剧"选项，使用精确匹配
-        await page.wait_for_selector(':text-is("短剧")', state='visible', timeout=5000)
-        await page.click(':text-is("短剧")')
+        await page.wait_for_selector(':text-is("短剧"), :text-is("小程序短剧")', state='visible', timeout=5000)
+        await page.click(':text-is("短剧"), :text-is("小程序短剧")')
         # 等待并点击"选择需要添加的短剧"按钮
         await page.wait_for_selector(':text-is("选择需要添加的短剧")', state='visible', timeout=5000)
         await page.click(':text-is("选择需要添加的短剧")')
