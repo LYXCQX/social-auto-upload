@@ -327,7 +327,10 @@ class DouYinVideo(object):
                 await asyncio.sleep(2)
 
         # 上传视频封面
-        await self.set_thumbnail(page, self.thumbnail_path)
+        # await self.set_thumbnail(page, self.thumbnail_path)
+
+        # 添加声明
+        await self.add_declaration(page)
 
         # 更换可见元素
         # await self.set_location(page, "杭州市")
@@ -777,6 +780,96 @@ class DouYinVideo(object):
             await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
             await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
+
+    async def add_declaration(self, page: Page):
+        """添加声明"""
+        try:
+            # 检查info中是否有declaration且不为"不声明"
+            if not self.info:
+                douyin_logger.info('[-] 没有info信息，跳过声明添加')
+                return
+
+            declaration = self.info.get('declaration', '')
+            if not declaration or declaration == '不声明':
+                douyin_logger.info('[-] 没有声明内容或选择不声明，跳过声明添加')
+                return
+
+            douyin_logger.info(f'[+] 开始添加声明: {declaration}')
+
+            # 点击"添加声明"按钮
+            add_declaration_button = page.locator('p:has-text("添加声明")')
+            if await add_declaration_button.count() > 0:
+                await add_declaration_button.click()
+                douyin_logger.info('[+] 点击了添加声明按钮')
+
+                # 等待弹出框出现
+                await page.wait_for_selector('.semi-sidesheet-content', timeout=10000)
+                douyin_logger.info('[+] 声明选择弹出框已出现')
+
+                # 在弹出框中查找对应的声明选项，尝试多种选择器
+                declaration_selected = False
+
+                # 方法1: 尝试点击包含文本的radio标签
+                try:
+                    radio_label = page.locator(f'.semi-sidesheet-content .semi-radio:has-text("{declaration}")')
+                    if await radio_label.count() > 0:
+                        await radio_label.click()
+                        declaration_selected = True
+                        douyin_logger.info(f'[+] 通过radio标签成功选择声明: {declaration}')
+                except Exception as e:
+                    douyin_logger.warning(f'[!] 通过radio标签点击失败: {str(e)}')
+
+                # 方法2: 如果方法1失败，尝试点击span的父级label元素
+                if not declaration_selected:
+                    try:
+                        parent_label = page.locator(f'.semi-sidesheet-content label:has(span:has-text("{declaration}"))')
+                        if await parent_label.count() > 0:
+                            await parent_label.click()
+                            declaration_selected = True
+                            douyin_logger.info(f'[+] 通过父级label成功选择声明: {declaration}')
+                    except Exception as e:
+                        douyin_logger.warning(f'[!] 通过父级label点击失败: {str(e)}')
+
+                # 方法3: 如果前面都失败，尝试强制点击span元素
+                if not declaration_selected:
+                    try:
+                        declaration_span = page.locator(f'.semi-sidesheet-content span:has-text("{declaration}")')
+                        if await declaration_span.count() > 0:
+                            await declaration_span.click(force=True)
+                            declaration_selected = True
+                            douyin_logger.info(f'[+] 通过强制点击span成功选择声明: {declaration}')
+                    except Exception as e:
+                        douyin_logger.warning(f'[!] 强制点击span失败: {str(e)}')
+
+                if declaration_selected:
+                    # 等待一下让选择生效
+                    await page.wait_for_timeout(500)
+
+                    # 点击确定按钮关闭弹出框
+                    confirm_button = page.locator('.semi-sidesheet-content button:has-text("确定")')
+                    if await confirm_button.count() > 0:
+                        await confirm_button.click()
+                        douyin_logger.info('[+] 点击确定按钮关闭弹出框')
+                    else:
+                        # 尝试其他可能的确定按钮选择器
+                        confirm_button = page.locator('.semi-sidesheet-content .semi-button-primary')
+                        if await confirm_button.count() > 0:
+                            await confirm_button.click()
+                            douyin_logger.info('[+] 点击确定按钮关闭弹出框')
+                        else:
+                            douyin_logger.warning('[!] 未找到确定按钮')
+
+                    # 等待弹出框关闭
+                    await page.wait_for_timeout(1000)
+                    douyin_logger.info('[+] 声明添加完成')
+                else:
+                    douyin_logger.warning(f'[!] 所有方法都无法选择声明选项: {declaration}')
+            else:
+                douyin_logger.warning('[!] 未找到添加声明按钮')
+
+        except Exception as e:
+            douyin_logger.error(f'[!] 添加声明失败: {str(e)}')
+
     # async def set_location(self, page: Page, location: str = "杭州市"):
     #     # todo supoort location later
     #     # await page.get_by_text('添加标签').locator("..").locator("..").locator("xpath=following-sibling::div").locator(
