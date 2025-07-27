@@ -354,7 +354,7 @@ class TencentVideo(object):
                     await self.add_short_play_by_baobai(page)
                 else:
                     if 1 < upload_count != i + 1:
-                        continue
+                        tencent_logger.info('，，，')
                     else:
                         await self.add_activity(page)
             else:

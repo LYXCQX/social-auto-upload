@@ -680,16 +680,47 @@ class DouYinVideo(object):
         if await hard_req_element.count() > 0:
             # 获取硬性要求的内容
             hard_req_content = await hard_req_element.locator("..").text_content()
-            # 找到第一个#的位置
-            hash_index = hard_req_content.find('#')
-            if hash_index != -1:
-                # 获取从第一个#到最后的内容作为标题
-                self.title = f"{hard_req_content[hash_index:]} {self.title}"
-                douyin_logger.info(f'[+] 从硬性要求中获取到标题: {self.title}')
+            douyin_logger.info(f'[+] 获取到硬性要求原始内容: {hard_req_content}')
+
+            # 按照规则提取硬性要求：以每个"#"符号及其后续的空格作为独立要求的分隔标识
+            hard_requirements = self.extract_hard_requirements(hard_req_content)
+
+            if hard_requirements:
+                # 将所有硬性要求按原有结构和顺序组合到标题前
+                requirements_text = " ".join(hard_requirements)
+                self.title = f"{requirements_text} {self.title}"
+                douyin_logger.info(f'[+] 提取到 {len(hard_requirements)} 个硬性要求')
+                douyin_logger.info(f'[+] 硬性要求列表: {hard_requirements}')
+                douyin_logger.info(f'[+] 最终标题: {self.title}')
             else:
-                douyin_logger.info("没有找到硬性要求标签")
+                douyin_logger.info("[-] 硬性要求中没有找到以#开头的要求项")
         else:
-            douyin_logger.info("-没有找到硬性要求标签")
+            douyin_logger.info("[-] 没有找到硬性要求标签")
+
+    def extract_hard_requirements(self, content):
+        """
+        提取硬性要求，按照规则处理：
+        1. 不要将所有内容都提前处理或合并
+        2. 以每个"#"符号及其后续的空格作为一个独立要求的分隔标识
+        3. 每个以"#"开头的行应被视为一个单独的硬性要求条目
+        4. 保持每个要求的独立性，按原有的结构和顺序进行提取
+        5. 确保在提取过程中不丢失或合并任何以"#"标识的要求项
+        """
+        if not content:
+            return []
+
+        requirements = []
+        lines = content.split('\n')
+
+        for line in lines:
+            line = line.strip()
+            # 查找以"#"开头的行
+            if line.startswith('#'):
+                # 每个以"#"开头的行作为独立的硬性要求条目
+                requirements.append(line)
+                douyin_logger.info(f'[+] 提取硬性要求条目: {line}')
+
+        return requirements
 
     async def click_playlet_video(self, page, playlet_title_tag, new_task=False):
         # 如果有标签,点击对应标签

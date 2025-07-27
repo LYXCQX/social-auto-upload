@@ -150,7 +150,7 @@ async def xt_have_task(page, playlet_title,pub_config):
     await page.wait_for_timeout(2000)  # 等待搜索结果加载
 
     # 获取所有可见的"去上传"按钮
-    upload_buttons = page.locator('button:has-text("去上传"):visible')
+    upload_buttons = page.locator('button:has-text("查看详情"):visible')
     upload_count = await upload_buttons.count()
     douyin_logger.info(f'[+] 找到 {upload_count} 个可见的去上传按钮')
 
