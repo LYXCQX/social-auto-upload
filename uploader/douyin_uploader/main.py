@@ -304,6 +304,8 @@ class DouYinVideo(object):
         # 添加商品
         await self.add_goods(page)
         await self.set_collection(page)
+        # 添加声明
+        await self.add_declaration(page)
         while True:
             # 判断重新上传按钮是否存在，如果不存在，代表视频正在上传，则等待
             try:
@@ -327,10 +329,8 @@ class DouYinVideo(object):
                 await asyncio.sleep(2)
 
         # 上传视频封面
-        # await self.set_thumbnail(page, self.thumbnail_path)
+        await self.set_thumbnail(page, self.thumbnail_path)
 
-        # 添加声明
-        await self.add_declaration(page)
 
         # 更换可见元素
         # await self.set_location(page, "杭州市")
@@ -459,7 +459,7 @@ class DouYinVideo(object):
                 try:
                     # 方式一：累加所有 .rate 的值
                     rates = card.locator('.rate')
-                    douyin_logger.info(f"任务卡片 HTML: {await rates.evaluate('element => element.outerHTML')}")
+                    # douyin_logger.info(f"任务卡片 HTML: {await rates.evaluate('element => element.outerHTML')}")
                     total_rate = 0
                     rate_count = await rates.count()
                     for j in range(rate_count):
@@ -471,7 +471,7 @@ class DouYinVideo(object):
                         max_amount = total_rate
                         max_card = card
                 except:
-                    douyin_logger.error('计算佣金失败')
+                    douyin_logger.exception('计算佣金失败')
                     try:
                         # 方式二：查找总奖金金额
                         price_element = card.locator('.price-number')
@@ -496,13 +496,27 @@ class DouYinVideo(object):
                 await tougao.evaluate('el => el.click()')
                 douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
                 return
+            else:
+                # 最大佣金计算失败，随便点击第一条记录
+                douyin_logger.warning('[!] 最大佣金计算失败，随便点击第一条记录继续执行')
+                try:
+                    first_card = percent_elements.nth(0)
+                    tougao = first_card.locator('button:has-text("我要投稿"):visible, button:has-text("参与投稿"):visible')
+                    if await tougao.count() > 0:
+                        await tougao.evaluate('el => el.click()')
+                        douyin_logger.info('[+] 已点击第一条任务记录')
+                        return
+                    else:
+                        douyin_logger.error('[!] 第一条记录中没有找到投稿按钮')
+                except Exception as e:
+                    douyin_logger.error(f'[!] 点击第一条记录失败: {str(e)}')
 
         # 如果上面的方式都没找到，尝试直接查找"我要投稿"按钮
-        # submit_button = page.locator('span:text("我要投稿")')
-        # if await submit_button.count() > 0:
-        #     await submit_button.click()
-        #     douyin_logger.info('[+] 直接点击了"我要投稿"按钮')
-        #     return
+        submit_button = page.locator('button:has-text("我要投稿"):visible, button:has-text("参与投稿"):visible')
+        if await submit_button.count() > 0:
+            await submit_button.first.click()
+            douyin_logger.info('[+] 直接点击了第一个可见的投稿按钮')
+            return
 
         raise UpdateError(f"没有找到任务标签:{playlet_title}，可能还没接取该任务，请先接取任务")
 
@@ -685,18 +699,18 @@ class DouYinVideo(object):
             hard_req_content = await hard_req_element.locator("..").text_content()
             douyin_logger.info(f'[+] 获取到硬性要求原始内容: {hard_req_content}')
 
-            # 按照规则提取硬性要求：以每个"#"符号及其后续的空格作为独立要求的分隔标识
+            # 按照规则提取硬性要求：以每个"#"和"@"符号及其后续的空格作为独立要求的分隔标识
             hard_requirements = self.extract_hard_requirements(hard_req_content)
 
             if hard_requirements:
                 # 将所有硬性要求按原有结构和顺序组合到标题前
                 requirements_text = " ".join(hard_requirements)
-                self.title = f"{requirements_text} {self.title}"
+                self.title = f"{requirements_text.replace('！','！！')} {self.title}"
                 douyin_logger.info(f'[+] 提取到 {len(hard_requirements)} 个硬性要求')
                 douyin_logger.info(f'[+] 硬性要求列表: {hard_requirements}')
                 douyin_logger.info(f'[+] 最终标题: {self.title}')
             else:
-                douyin_logger.info("[-] 硬性要求中没有找到以#开头的要求项")
+                douyin_logger.info("[-] 硬性要求中没有找到以#或@开头的要求项")
         else:
             douyin_logger.info("[-] 没有找到硬性要求标签")
 
@@ -704,26 +718,86 @@ class DouYinVideo(object):
         """
         提取硬性要求，按照规则处理：
         1. 不要将所有内容都提前处理或合并
-        2. 以每个"#"符号及其后续的空格作为一个独立要求的分隔标识
-        3. 每个以"#"开头的行应被视为一个单独的硬性要求条目
-        4. 保持每个要求的独立性，按原有的结构和顺序进行提取
-        5. 确保在提取过程中不丢失或合并任何以"#"标识的要求项
+        2. 以每个"#"和"@"符号作为独立标签进行提取
+        3. 支持从行内提取多个#和@标签
+        4. 保持每个标签的独立性，按原有的结构和顺序进行提取
+        5. 确保在提取过程中不丢失或合并任何以"#"或"@"标识的标签
         """
         if not content:
             return []
 
         requirements = []
-        lines = content.split('\n')
+        import re
+        line = content.strip()
 
-        for line in lines:
-            line = line.strip()
-            # 查找以"#"开头的行
-            if line.startswith('#'):
-                # 每个以"#"开头的行作为独立的硬性要求条目
-                requirements.append(line)
-                douyin_logger.info(f'[+] 提取硬性要求条目: {line}')
+        # 方法1: 查找以"#"或"@"开头的行（保持原有逻辑）
+        if line.startswith('#') or line.startswith('@'):
+            requirements.append(line)
+            douyin_logger.info(f'[+] 提取硬性要求条目（整行）: {line}')
+        else:
+            # 方法2: 从行内提取所有#和@标签
+            # 使用正则表达式匹配 #标签 和 @用户
+            hash_tags = re.findall(r'#[^\s#@]+', line)
+            at_tags = re.findall(r'@[^\s#@]+', line)
+
+            # 添加找到的#标签，去除标点符号
+            for tag in hash_tags:
+                cleaned_tag = self.clean_tag_punctuation(tag)
+                if cleaned_tag:  # 只添加非空的清理后标签
+                    requirements.append(cleaned_tag)
+                    if cleaned_tag != tag:
+                        douyin_logger.info(f'[+] 提取硬性要求条目（#标签）: {tag} -> {cleaned_tag}')
+                    else:
+                        douyin_logger.info(f'[+] 提取硬性要求条目（#标签）: {tag}')
+
+            # 添加找到的@标签，去除标点符号
+            for tag in at_tags:
+                cleaned_tag = self.clean_tag_punctuation(tag)
+                if cleaned_tag:  # 只添加非空的清理后标签
+                    requirements.append(cleaned_tag)
+                    if cleaned_tag != tag:
+                        douyin_logger.info(f'[+] 提取硬性要求条目（@标签）: {tag} -> {cleaned_tag}')
+                    else:
+                        douyin_logger.info(f'[+] 提取硬性要求条目（@标签）: {tag}')
 
         return requirements
+
+    def clean_tag_punctuation(self, tag):
+        """
+        清理标签中的标点符号
+        保留标签开头的#或@符号，去除其他标点符号
+        """
+        if not tag:
+            return tag
+
+        import string
+
+        # 保存开头的#或@符号
+        prefix = ''
+        content = tag
+        if tag.startswith('#'):
+            prefix = '#'
+            content = tag[1:]
+        elif tag.startswith('@'):
+            prefix = '@'
+            content = tag[1:]
+
+        # 定义要去除的标点符号（保留一些常用字符）
+        # 去除常见的中英文标点符号，但保留下划线、连字符等
+        punctuation_to_remove = '！？。，、；：""''（）【】《》〈〉「」『』〔〕…—–-·•'
+        punctuation_to_remove += string.punctuation.replace('_', '').replace('-', '')
+
+        # 去除标点符号
+        cleaned_content = ''.join(char for char in content if char not in punctuation_to_remove)
+
+        # 如果清理后内容为空，返回空字符串
+        if not cleaned_content.strip():
+            return ''
+
+        # 返回清理后的标签
+        cleaned_tag = prefix + cleaned_content
+
+        return cleaned_tag
 
     async def click_playlet_video(self, page, playlet_title_tag, new_task=False):
         # 如果有标签,点击对应标签
@@ -772,14 +846,14 @@ class DouYinVideo(object):
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
             await page.click('text="选择封面"')
-            await page.wait_for_selector("div.semi-modal-content:visible")
+            await page.wait_for_selector("div.semi-upload-drag-area:visible")
             await page.click('text="设置竖封面"')
             await page.wait_for_timeout(2000)  # 等待2秒
             # 定位到上传区域并点击
-            # await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
-            await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
+            await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
+            # await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
-            await page.locator("div[class^='extractFooter'] button:visible:has-text('完成')").click()
+            await page.locator("div#tooltip-container button:visible:has-text('完成')").click()
 
     async def add_declaration(self, page: Page):
         """添加声明"""
