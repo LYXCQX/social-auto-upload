@@ -102,7 +102,7 @@ async def add_goods(parent_, page):
         await page.click('text="完成编辑"')
 
 
-async def get_title_tag(self, page):
+async def get_title_tag(parent_, page):
     # 等待硬性要求标签出现
     await page.wait_for_timeout(1000)
     hard_req_element = page.locator('text="硬性要求"')
@@ -112,22 +112,22 @@ async def get_title_tag(self, page):
         douyin_logger.info(f'[+] 获取到硬性要求原始内容: {hard_req_content}')
 
         # 按照规则提取硬性要求：以每个"#"和"@"符号及其后续的空格作为独立要求的分隔标识
-        hard_requirements = self.extract_hard_requirements(hard_req_content)
+        hard_requirements = extract_hard_requirements(hard_req_content)
 
         if hard_requirements:
             # 将所有硬性要求按原有结构和顺序组合到标题前
             requirements_text = " ".join(hard_requirements)
-            self.title = f"{requirements_text.replace('！', '！！')} {self.title}"
+            parent_.title = f"{requirements_text.replace('！', '！！')} {parent_.title}"
             douyin_logger.info(f'[+] 提取到 {len(hard_requirements)} 个硬性要求')
             douyin_logger.info(f'[+] 硬性要求列表: {hard_requirements}')
-            douyin_logger.info(f'[+] 最终标题: {self.title}')
+            douyin_logger.info(f'[+] 最终标题: {parent_.title}')
         else:
             douyin_logger.info("[-] 硬性要求中没有找到以#或@开头的要求项")
     else:
         douyin_logger.info("[-] 没有找到硬性要求标签")
 
 
-def extract_hard_requirements(self, content):
+def extract_hard_requirements(content):
     """
     提取硬性要求，按照规则处理：
     1. 不要将所有内容都提前处理或合并
@@ -155,7 +155,7 @@ def extract_hard_requirements(self, content):
 
         # 添加找到的#标签，去除标点符号
         for tag in hash_tags:
-            cleaned_tag = self.clean_tag_punctuation(tag)
+            cleaned_tag = clean_tag_punctuation(tag)
             if cleaned_tag:  # 只添加非空的清理后标签
                 requirements.append(cleaned_tag)
                 if cleaned_tag != tag:
@@ -165,7 +165,7 @@ def extract_hard_requirements(self, content):
 
         # 添加找到的@标签，去除标点符号
         for tag in at_tags:
-            cleaned_tag = self.clean_tag_punctuation(tag)
+            cleaned_tag = clean_tag_punctuation(tag)
             if cleaned_tag:  # 只添加非空的清理后标签
                 requirements.append(cleaned_tag)
                 if cleaned_tag != tag:
@@ -176,7 +176,7 @@ def extract_hard_requirements(self, content):
     return requirements
 
 
-def clean_tag_punctuation(self, tag):
+def clean_tag_punctuation(tag):
     """
     清理标签中的标点符号
     保留标签开头的#或@符号，去除其他标点符号

@@ -663,7 +663,7 @@ class DouYinVideo(object):
             await detail_button.evaluate('el => el.click()')
             douyin_logger.info('[+] 点击了查看任务详情按钮')
             await page.wait_for_timeout(2000)  # 等待详情页面加载
-            await self.get_title_tag(page)
+            await get_title_tag(self,page)
             # 点击"上传视频"按钮 - 使用精确匹配
             upload_button = page.get_by_role("button", name="上传视频")
             if await upload_button.count() > 0:
