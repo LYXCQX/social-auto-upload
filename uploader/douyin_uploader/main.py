@@ -715,14 +715,14 @@ class DouYinVideo(object):
     async def set_thumbnail(self, page: Page, thumbnail_path: str):
         if thumbnail_path:
             await page.click('text="选择封面"')
-            await page.wait_for_selector("div.semi-upload-drag-area:visible")
+            await page.wait_for_selector('span:has-text("设置竖封面"):visible')
             await page.click('text="设置竖封面"')
             await page.wait_for_timeout(2000)  # 等待2秒
             # 定位到上传区域并点击
             await (page.locator("div[class^='semi-upload upload'] >> input.semi-upload-hidden-input").set_input_files(thumbnail_path))
             # await page.set_input_files('.semi-upload-hidden-input', thumbnail_path)
             await page.wait_for_timeout(2000)  # 等待2秒
-            await page.locator("div#tooltip-container button:visible:has-text('完成')").click()
+            await page.locator("button:visible:has-text('完成')").click()
 
 
 
@@ -740,7 +740,7 @@ class DouYinVideo(object):
     async def set_collection(self, page):
         """设置视频合集"""
         try:
-            if not self.collection:
+            if not self.collection or self.collection =='{jm}':
                 return
 
             douyin_logger.info(f'[+] 开始设置合集: {self.collection}')
