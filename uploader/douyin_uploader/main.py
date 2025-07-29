@@ -480,7 +480,7 @@ class DouYinVideo(object):
                 # 点击最大金额对应的任务卡片
                 douyin_logger.info(f"任务卡片 HTML: {await max_card.evaluate('element => element.outerHTML')}")
 
-                tougao = max_card.locator('button:has-text("我要投稿"):visible, button:has-text("参与投稿"):visible')
+                tougao = max_card.locator('button:has-text("我要投稿"):visible, button:has-text("预约投稿"):visible,button:has-text("参与投稿"):visible')
                 await tougao.evaluate('el => el.click()')
                 douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
                 return
@@ -489,7 +489,7 @@ class DouYinVideo(object):
                 douyin_logger.warning('[!] 最大佣金计算失败，随便点击第一条记录继续执行')
                 try:
                     first_card = percent_elements.nth(0)
-                    tougao = first_card.locator('button:has-text("我要投稿"):visible, button:has-text("参与投稿"):visible')
+                    tougao = first_card.locator('button:has-text("我要投稿"):visible, button:has-text("预约投稿"):visible,button:has-text("参与投稿"):visible')
                     if await tougao.count() > 0:
                         await tougao.evaluate('el => el.click()')
                         douyin_logger.info('[+] 已点击第一条任务记录')
@@ -500,7 +500,7 @@ class DouYinVideo(object):
                     douyin_logger.error(f'[!] 点击第一条记录失败: {str(e)}')
 
         # 如果上面的方式都没找到，尝试直接查找"我要投稿"按钮
-        submit_button = page.locator('button:has-text("我要投稿"):visible, button:has-text("参与投稿"):visible')
+        submit_button = page.locator('button:has-text("我要投稿"):visible, button:has-text("预约投稿"):visible, button:has-text("参与投稿"):visible')
         if await submit_button.count() > 0:
             await submit_button.first.click()
             douyin_logger.info('[+] 直接点击了第一个可见的投稿按钮')
@@ -593,12 +593,12 @@ class DouYinVideo(object):
     # 点击投稿
     async def click_tougao(self, page):
         page = await page.wait_for_event('popup')
-        await page.wait_for_selector('span:text("我要投稿"), span:text("参与投稿")', state='visible', timeout=10000)  # 等待按钮可见
+        await page.wait_for_selector('span:text("我要投稿"), button:has-text("预约投稿"):visible, span:text("参与投稿")', state='visible', timeout=10000)  # 等待按钮可见
         await get_title_tag(self,page)
         # 点击"我要投稿"或"参与投稿"按钮
         start_time = time.time()
         while True:
-            submit_button = page.locator('span:text("我要投稿"), span:text("参与投稿")')
+            submit_button = page.locator('span:text("我要投稿"), button:has-text("预约投稿"):visible, span:text("参与投稿")')
             if await submit_button.count() == 0:
                 submit_button = page.locator('span:text("预约投稿")')
             if await submit_button.count() > 0:
