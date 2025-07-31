@@ -15,7 +15,7 @@ from social_auto_upload.utils.bus_exception import UpdateError, BusError
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
 
-from src.publish.social_auto_upload.uploader.douyin_uploader.main_tz import add_declaration, add_goods, get_title_tag
+from social_auto_upload.uploader.douyin_uploader.main_tz import add_declaration, add_goods, get_title_tag
 
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
