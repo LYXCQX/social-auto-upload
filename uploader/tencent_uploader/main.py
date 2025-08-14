@@ -358,7 +358,7 @@ class TencentVideo(object):
                     else:
                         await self.add_activity(page)
             else:
-                tencent_logger.info('未选择挂剧')
+                tencent_logger.info('未选择挂短剧')
             try:
                 await add_original(self, page)
             except:
@@ -519,7 +519,7 @@ class TencentVideo(object):
         await page.click('input[placeholder="请输入短剧名称"]')
         anchor_info = self.info.get("anchor_info", None)
         if not anchor_info:
-            raise UpdateError(f"未找到挂剧参数：{anchor_info}")
+            raise UpdateError(f"未找到挂短剧参数：{anchor_info}")
 
         # 获取展示剧名和搜索剧名
         display_name = anchor_info.get("display_name", None)
@@ -528,7 +528,7 @@ class TencentVideo(object):
         # 如果没有设置专门的搜索剧名和展示剧名，则使用旧逻辑的剧名
         playlet_title = anchor_info.get("title", None)
         if not playlet_title:
-            raise UpdateError(f"未找到挂剧参数：{playlet_title}")
+            raise UpdateError(f"未找到挂短剧参数：{playlet_title}")
 
         # 优先使用搜索剧名进行搜索
         search_title = search_name if search_name else playlet_title
