@@ -60,6 +60,7 @@ async def juliang_setup(account_file, handle=False, local_executable_path=None):
 
 
 async def get_user_id(page):
+    global user_id, douyin_id
     start_time = time.time()  # 获取开始时间
     while True:
         try:
@@ -72,7 +73,7 @@ async def get_user_id(page):
                 user_id = "0"
             douyin_logger.info(f"提取的用户ID: {user_id}")
             
-            douyin_id_element = basic_info.locator('text=抖音号:')
+            douyin_id_element = basic_info.locator('text=抖音号:').first
             douyin_id_text = await douyin_id_element.text_content()
             douyin_parts = douyin_id_text.split("抖音号:")
             if len(douyin_parts) > 1:
@@ -81,17 +82,18 @@ async def get_user_id(page):
                 douyin_id = ""
             douyin_logger.info(f"提取的抖音ID: {douyin_id}")
             if user_id == '0' or not user_id:
-                current_time = time.time()  # 获取当前时间
-                elapsed_time = current_time - start_time  # 计算已经过去的时间
-                if elapsed_time > 30:  # 如果已经过去的时间超过30秒
-                    douyin_logger.info(f"超时30秒，退出循环，返回user_id={user_id}, douyin_id={douyin_id}")
-                    break  # 退出循环
+                douyin_logger.info(f"获取用户ID时失败")
             else:
                 douyin_logger.info(f"成功获取ID，退出循环，返回user_id={user_id}, douyin_id={douyin_id}")
                 break  # 退出循环
         except Exception as e:
+            douyin_logger.exception(f"获取用户ID时发生错误：{str(e)}")
             await asyncio.sleep(0.5)
-            
+        current_time = time.time()  # 获取当前时间
+        elapsed_time = current_time - start_time  # 计算已经过去的时间
+        if elapsed_time > 30:  # 如果已经过去的时间超过30秒
+            douyin_logger.info(f"超时30秒，退出循环，返回user_id={user_id}, douyin_id={douyin_id}")
+            break  # 退出循环
     return user_id, douyin_id
 
 
