@@ -810,14 +810,14 @@ class DouYinVideo(object):
             title_input = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator(
                 "input")
             if await title_input.count():
-                await title_input.fill(self.title[:30])
+                await title_input.type(self.title[:30], delay=50)
             else:
                 # 备用方案
                 title_input = page.locator(".notranslate")
                 await title_input.click()
                 await page.keyboard.press("Control+A")
                 await page.keyboard.press("Delete")
-                await title_input.type(self.title)
+                await title_input.type(self.title, delay=50)
                 await page.keyboard.press("Enter")
 
             # 填充话题
