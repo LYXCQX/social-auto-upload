@@ -81,6 +81,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                     item = feed_items[current_index]
                     # 获取发布时间
                     post_time_element = item.locator('.post-time')
+                    should_delete = False
                     if await post_time_element.count() > 0:
                         post_time_str = await post_time_element.text_content()
                         # 解析发布时间
@@ -95,7 +96,10 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                         
                         # 获取视频标题用于日志
                         try:
-                            title = await item.locator('.post-title').text_content()
+                            if await item.locator('.post-title').count()>0:
+                                title = await item.locator('.post-title').text_content()
+                            else:
+                                title = ''
                         except Exception as e:
                             tencent_logger.error(f"[删除流程] 获取视频标题时出错: {str(e)}")
                             title = ''
@@ -108,7 +112,6 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                         tencent_logger.info(f"[删除流程] - 条件比对: 时间>{minutes_ago}分钟 且 播放量<{max_views}")
                         tencent_logger.info(f"[删除流程] - 实际数据: {time_diff:.0f}>{minutes_ago} 且 {views_count}<{max_views}")
                         # 检查是否满足删除条件
-                        should_delete = False
                         if video_title:
                             if title.startswith(video_title) and  minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and views_count < max_views:
                                 should_delete = True
@@ -119,21 +122,32 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                                 tencent_logger.info(f"[删除流程] => 符合删除条件")
                             else:
                                 tencent_logger.info(f"[删除流程] => 不符合删除条件")
-
-                        if should_delete:
-                            # 执行删除
-                            delete_button = item.locator('text=删除')
-                            if await delete_button.count() > 0:
-                                tencent_logger.info(
-                                    f"[删除流程] 找到符合条件的视频，准备删除{title}")
-                                await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
-                                await page.click(':text-is("确定")')
-                                deleted_count += 1
-                                await asyncio.sleep(2)
-                                # 删除后重新获取视频列表
-                                feed_items = await page.locator('.post-feed-item').all()
-                                # 不增加索引，因为当前项已被删除，下一项会变成当前索引位置
-                                continue
+                        item_title = item.locator('.post-title')
+                        if await item_title.count() > 0:
+                            title_text = await item_title.text_content()
+                            if title_text.startswith('waitdel-'):
+                                should_delete = True
+                                tencent_logger.info(f"[删除流程] => waitdel-视频符合删除条件")
+                    else:
+                        fail_video = await item.locator('.post-processed-fail').count()
+                        print(f'fail_video--{fail_video}')
+                        print(await item.inner_html())
+                        if fail_video > 0:
+                            should_delete = True
+                            tencent_logger.info(f"[删除流程] => 错误视频符合删除条件")
+                    if should_delete:
+                        # 执行删除
+                        delete_button = item.locator('text=删除')
+                        if await delete_button.count() > 0:
+                            tencent_logger.info(f"[删除流程] 找到符合条件的视频，准备删除")
+                            await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+                            await page.click(':text-is("确定")')
+                            deleted_count += 1
+                            await asyncio.sleep(2)
+                            # 删除后重新获取视频列表
+                            feed_items = await page.locator('.post-feed-item').all()
+                            # 不增加索引，因为当前项已被删除，下一项会变成当前索引位置
+                            continue
 
                     current_index += 1
                 except Exception as e:

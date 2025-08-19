@@ -428,7 +428,8 @@ class TencentVideo(object):
             try:
                 is_first_time = False  # 标记是否使用第一个视频的时间
                 start_time = time.time()  # 记录开始时间
-                timeout = 20  # 20秒超时
+                timeout = 300  # 5分钟超时
+                running_cover_item = None
 
                 while True:  # 外层循环，直到找不到匹配的post_time为止
                     current_time = time.time()
@@ -437,6 +438,15 @@ class TencentVideo(object):
 
                     # 检查是否超时
                     if elapsed > timeout:
+                        if running_cover_item:
+                            # 执行删除
+                            delete_button = running_cover_item.locator('text=删除')
+                            if await delete_button.count() > 0:
+                                tencent_logger.info(f"[删除流程] 超时找到删除按钮，准备删除视频")
+                                await delete_button.locator('..').locator('.opr-item').evaluate(
+                                    'el => el.click()')
+                                await page.click(':text-is("确定")')
+                                await asyncio.sleep(2)
                         tencent_logger.warning(f"[删除流程] 删除操作超过{timeout}秒，自动结束")
                         break
 
@@ -475,6 +485,20 @@ class TencentVideo(object):
                             if await item_title.count() > 0:
                                 title_text = await item_title.text_content()
                                 if title_text.startswith('waitdel-'):
+                                    # 检查是否存在running-cover标签
+                                    running_cover = await item.locator('.running-cover').count()
+                                    if running_cover > 0:
+                                        # 检查是否启用了完毕后删除设置
+                                        if self.info and self.info.get("delete_after_complete", False):
+                                            running_cover_item = item
+                                            tencent_logger.info(f"[删除流程] 视频正在处理中，刷新页面后重试")
+                                            await page.reload()
+                                            found_video = True
+                                            is_first_time = True
+                                            await asyncio.sleep(4)
+                                            break  # 跳出内层循环，继续外层循环
+                                        else:
+                                            tencent_logger.info(f"[删除流程] 视频正在处理中，但未启用完毕后删除设置，跳过处理")
                                     # 执行删除
                                     delete_button = item.locator('text=删除')
                                     if await delete_button.count() > 0:
@@ -485,7 +509,7 @@ class TencentVideo(object):
                                         found_video = True
                                         is_first_time = True
                                         await asyncio.sleep(2)
-                                        # break
+                                        break
                         except Exception as e:
                             tencent_logger.exception(f"[删除流程] 处理视频项时出错：{str(e)}")
                             continue
