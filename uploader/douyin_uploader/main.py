@@ -111,7 +111,7 @@ async def douyin_cookie_gen(account_file,local_executable_path=None):
         browser = await playwright.chromium.launch(headless=False,
                                                    executable_path=local_executable_path)
         # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
+        context = await browser.new_context(storage_state=f"{account_file}")  # Pass any options
         context = await set_init_script(context)
         # Pause the page, and start recording manually.
         page = await context.new_page()
@@ -133,7 +133,7 @@ async def douyin_cookie_gen(account_file,local_executable_path=None):
                 break
             elapsed_time = time.time() - start_time
             # 检查是否超过了超时时间
-            if elapsed_time > 120:
+            if elapsed_time > 1200:
                 raise TimeoutError("操作超时，跳出循环")
         user_id = await get_user_id(page)
         user_name = await page.locator('[class^="header-"] [class^="name-"]').text_content()
