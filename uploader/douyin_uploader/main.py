@@ -45,16 +45,16 @@ async def cookie_auth(account_file, local_executable_path=None,un_close=False):
         try:
             await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
         except:
-            print("[+] 等待5秒 cookie 失效")
+            douyin_logger.info("[+] 等待5秒 cookie 失效")
             await context.close()
             await browser.close()
             return False
         # 2024.06.17 抖音创作者中心改版
-        if await page.get_by_text('手机号登录').count() or await page.get_by_text('扫码登录').count():
-            print("[+] 等待5秒 cookie 失效")
+        if not await check_login(page):
+            douyin_logger.info("[+] 等待10秒 cookie 失效")
             return False
         else:
-            print("[+] cookie 有效")
+            douyin_logger.info("[+] cookie 有效")
             if un_close:
                 # 如果不关闭浏览器，则进入循环等待页面关闭
                 try:
@@ -89,7 +89,39 @@ async def douyin_setup(account_file, handle=False, local_executable_path=None):
 
     return True, user_id, user_name, None
 
+async def check_login(page):
+    # 开始检测条件
+    start_time = time.time()
+    check_interval = 0.5  # 检查间隔(秒)
+    timeout_seconds = 10
+    while (time.time() - start_time) < timeout_seconds:
+        # 检查条件1: 验证码登录或扫码登录
+        verification_login = await page.get_by_text('验证码登录').count()
+        scan_login = await page.get_by_text('扫码登录').count()
 
+        if verification_login > 0 or scan_login > 0:
+            douyin_logger.info(f"检测到登录选项: 验证码登录({verification_login}), 扫码登录({scan_login})")
+            douyin_logger.info("条件满足: 返回 False")
+            return False
+
+        # 检查条件2: 上传视频
+        upload_video = await page.get_by_text('上传视频').count()
+        if upload_video > 0:
+            douyin_logger.info(f"检测到'上传视频'元素: {upload_video} 个")
+            douyin_logger.info("条件满足: 返回 True")
+            return True
+
+        # 记录等待状态
+        elapsed = time.time() - start_time
+        if int(elapsed) != int(elapsed - check_interval):  # 每秒记录一次
+            douyin_logger.info(f"等待中... 已等待 {int(elapsed)} 秒")
+
+        # 短暂等待后重试
+        await asyncio.sleep(check_interval)
+
+    # 超时处理
+    douyin_logger.info(f"超时 ({timeout_seconds} 秒)，未检测到任何条件")
+    return False
 async def get_user_id(page):
     start_time = time.time()  # 获取开始时间
     while True:
@@ -283,7 +315,7 @@ class DouYinVideo(object):
             try:
                 # 尝试等待第一个 URL
                 await page.wait_for_url(
-                    "https://creator.douyin.com/creator-micro/content/publish*", timeout=3000)
+                    "https://creator.douyin.com/creator-micro/content/*", timeout=3000)
                 douyin_logger.info("[+] 成功进入version_1发布页面!")
                 break  # 成功进入页面后跳出循环
             except Exception:
@@ -296,7 +328,7 @@ class DouYinVideo(object):
 
                     break  # 成功进入页面后跳出循环
                 except:
-                    print("  [-] 超时未进入视频发布页面，重新尝试...")
+                    douyin_logger.info("  [-] 超时未进入视频发布页面，重新尝试...")
                     await asyncio.sleep(0.5)  # 等待 0.5 秒后重新尝试
         # 填充标题和话题
         await self.fill_title_and_tags(page)
