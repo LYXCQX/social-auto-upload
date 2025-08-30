@@ -100,15 +100,13 @@ async def check_login(page):
         scan_login = await page.get_by_text('扫码登录').count()
 
         if verification_login > 0 or scan_login > 0:
-            douyin_logger.info(f"检测到登录选项: 验证码登录({verification_login}), 扫码登录({scan_login})")
-            douyin_logger.info("条件满足: 返回 False")
+            douyin_logger.info(f"检测到登录选项: 验证码登录({verification_login}), 扫码登录({scan_login})，条件满足: 返回 False")
             return False
 
         # 检查条件2: 上传视频
         upload_video = await page.get_by_text('上传视频').count()
         if upload_video > 0:
-            douyin_logger.info(f"检测到'上传视频'元素: {upload_video} 个")
-            douyin_logger.info("条件满足: 返回 True")
+            douyin_logger.info(f"检测到'上传视频'元素: {upload_video} 个，条件满足: 返回 True")
             return True
 
         # 记录等待状态
@@ -386,52 +384,6 @@ class DouYinVideo(object):
             try:
                 publish_button = page.get_by_role('button', name="发布", exact=True)
                 if await publish_button.count():
-                    # start_time = time.time()
-                    # if self.check_video:
-                    #     while True:
-                    #         try:
-                    #             if await page.locator('p.progressingContent-QEbwRE:has-text("视频检测中")').count() > 0:
-                    #                 douyin_logger.info("  [-] 视频检测中...")
-                    #                 await asyncio.sleep(2)
-                    #             # 获取视频检测状态
-                    #             if (await page.locator('div:has-text("作品未见异常")').count() > 0 or
-                    #                     await page.locator('div:has-text("仅支持检测5分钟以内的视频")').count() > 0):
-                    #                 break
-                    #             elif await page.locator(
-                    #                     'section.contentWrapper-j5kIqC').count() > 0 or await page.locator(
-                    #                 'div.detectItemTitle-X5pTL9').count() > 0:
-                    #                 j5kIqC = await page.query_selector('section.contentWrapper-j5kIqC')
-                    #                 if j5kIqC:
-                    #                     msg_res = await page.locator('section.contentWrapper-j5kIqC').text_content()
-                    #                 X5pTL9 = await page.query_selector('div.detectItemTitle-X5pTL9')
-                    #                 if X5pTL9:
-                    #                     msg_res = await page.locator('div.detectItemTitle-X5pTL9').text_content()
-                    #                 if msg_res in failure_messages:
-                    #                     douyin_logger.error(f"  [-] 视频检测失败: {msg_res}")
-                    #                     return False, msg_res
-                    #                 else:
-                    #                     douyin_logger.success("  [-] 视频检测通过")
-                    #                     break
-                    #
-                    #             # 检查检测时间是否超过5分钟
-                    #             current_time = time.time()
-                    #             elapsed_time = current_time - start_time
-                    #             if elapsed_time > 300:
-                    #                 page_content = await page.content()
-                    #                 douyin_logger.info(f"页面内容: {page_content}")
-                    #                 msg_res = '五分钟也没有检测结果，直接返回'
-                    #                 break
-                    #         except:
-                    #             # 检查检测时间是否超过5分钟
-                    #             current_time = time.time()
-                    #             elapsed_time = current_time - start_time
-                    #             if elapsed_time > 300:
-                    #                 page_content = await page.content()
-                    #                 douyin_logger.info(f"页面内容: {page_content}")
-                    #                 msg_res = '五分钟也没有检测结果，直接返回'
-                    #                 break
-                    #             douyin_logger.info("  [-] 视频检测中...")
-                    #             await asyncio.sleep(2)
                     await publish_button.click()
                 await page.wait_for_url("https://creator.douyin.com/creator-micro/content/manage**",
                                         timeout=3000)  # 如果自动跳转到作品页面，则代表发布成功
@@ -483,7 +435,6 @@ class DouYinVideo(object):
                 try:
                     # 方式一：累加所有 .rate 的值
                     rates = card.locator('.rate')
-                    # douyin_logger.info(f"任务卡片 HTML: {await rates.evaluate('element => element.outerHTML')}")
                     total_rate = 0
                     rate_count = await rates.count()
                     for j in range(rate_count):
@@ -510,15 +461,12 @@ class DouYinVideo(object):
                         continue
             if max_card:
                 # 点击最大金额对应的任务卡片
-                douyin_logger.info(f"任务卡片 HTML: {await max_card.evaluate('element => element.outerHTML')}")
-
                 tougao = max_card.locator('button:has-text("我要投稿"):visible, button:has-text("预约投稿"):visible,button:has-text("参与投稿"):visible')
                 await tougao.evaluate('el => el.click()')
                 douyin_logger.info(f'[+] 选择了最高金额的任务: {max_amount}')
                 return
             else:
                 # 最大佣金计算失败，随便点击第一条记录
-                douyin_logger.warning('[!] 最大佣金计算失败，随便点击第一条记录继续执行')
                 try:
                     first_card = percent_elements.nth(0)
                     tougao = first_card.locator('button:has-text("我要投稿"):visible, button:has-text("预约投稿"):visible,button:has-text("参与投稿"):visible')
@@ -646,11 +594,6 @@ class DouYinVideo(object):
         if await confirm_box.count() > 0:
             await self.click_button_with_timeout(page, 'span:text("确定")', "确定", confirm_box)
             douyin_logger.info('[+] 点击了确认弹窗的确定按钮')
-
-            # async with page.expect_popup() as popup_info:
-            #     await self.click_button_with_timeout(page, selector='span:has-text("上传视频")', button_name="上传视频",force_click=True)
-            # douyin_logger.info('[+] 点击了上传视频按钮')
-            # page = await popup_info.value
             return page
         else:
             # 检查是否存在 el-dialog__body 元素
@@ -699,7 +642,6 @@ class DouYinVideo(object):
             # 点击"上传视频"按钮 - 使用精确匹配
             upload_button = page.get_by_role("button", name="上传视频")
             if await upload_button.count() > 0:
-                # await upload_button.click(force=True)
                 async with page.expect_popup() as popup_info:
                     await upload_button.evaluate('el => el.click()')  # 使用 JavaScript 强制点击
                 douyin_logger.info('[+] 点击了上传视频按钮')
@@ -864,7 +806,6 @@ class DouYinVideo(object):
                     tag_text = tag if tag.startswith('#') else f'#{tag}'
                     await page.type(css_selector, tag_text)
                     await page.press(css_selector, "Space")
-                douyin_logger.info(f'[+] 已添加 {len(self.tags)} 个话题')
 
         except Exception as e:
             douyin_logger.error(f'[!] 填充标题和话题失败: {str(e)}')
