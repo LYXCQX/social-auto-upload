@@ -20,6 +20,8 @@ from social_auto_upload.utils.log import tencent_logger
 
 from social_auto_upload.uploader.tencent_uploader.main_tz import add_original
 
+from src.publish.social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji
+
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config', "{}")).get('tencent', {})
 
@@ -352,6 +354,11 @@ class TencentVideo(object):
                 # 添加活动
                 if self.info.get("enable_baobai", False):
                     await self.add_short_play_by_baobai(page)
+                elif self.info.get("enable_juji", False):
+                    if 1 < upload_count != i + 1:
+                        tencent_logger.info('，，，')
+                    else:
+                        await add_short_play_by_juji(self,page,pub_config)
                 else:
                     if 1 < upload_count != i + 1:
                         tencent_logger.info('，，，')

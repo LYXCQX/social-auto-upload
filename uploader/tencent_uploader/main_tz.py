@@ -8,6 +8,8 @@ from social_auto_upload.utils.log import tencent_logger
 
 from social_auto_upload.utils.base_social_media import set_init_script
 
+from social_auto_upload.utils.bus_exception import UpdateError
+
 
 async def delete_video(local_executable_path, account_file, minutes_ago, max_views):
     async with async_playwright() as playwright:
@@ -232,3 +234,114 @@ async def add_original(parent_, page):
 #     # 如果时间包含空格（日期和时间之间），保留空格
 #     tencent_logger.debug(f"标准化后的时间: {post_time}")
 #     return post_time
+
+
+async def add_short_play_by_juji(self, page,pub_config):
+    # 等待并点击"选择链接"按钮
+    baobai_lj = pub_config.get('baobai_lj')
+    juji_jjxl = pub_config.get('juji_jjxl')
+    juji_xzjj = pub_config.get('juji_xzjj')
+    juji_jjss = pub_config.get('juji_jjss')
+    await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
+    await page.click(baobai_lj)
+    # 等待并点击"短剧"选项，使用精确匹配
+    await page.wait_for_selector(juji_jjxl, state='visible', timeout=5000)
+    await page.click(juji_jjxl)
+    # 等待并点击"选择需要添加的短剧"按钮
+    await page.wait_for_selector(juji_xzjj, state='visible', timeout=5000)
+    await page.click(juji_xzjj)
+    # 等待输入框出现
+    await page.wait_for_selector(juji_jjss, state='visible', timeout=5000)
+    await page.click(juji_jjss)
+    anchor_info = self.info.get("anchor_info", None)
+    if not anchor_info:
+        raise UpdateError(f"未找到挂短剧参数：{anchor_info}")
+
+    # 获取展示剧名和搜索剧名
+    display_name = anchor_info.get("display_name", None)
+    search_name = anchor_info.get("search_name", None)
+
+    # 如果没有设置专门的搜索剧名和展示剧名，则使用旧逻辑的剧名
+    playlet_title = anchor_info.get("title", None)
+    if not playlet_title:
+        raise UpdateError(f"未找到挂短剧参数：{playlet_title}")
+
+    # 优先使用搜索剧名进行搜索
+    search_title = search_name if search_name else playlet_title
+    # 优先使用展示剧名进行匹配
+    match_title = display_name if display_name else playlet_title
+    jishu = anchor_info.get("jishu", None)
+    tencent_logger.info(f"开始添加短剧: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
+
+    # 填充短剧名称
+    # 设置开始时间和超时时间
+    start_time = time.time()
+    timeout = 20  # 20秒超时
+    found = False
+    retry_count = 0
+    page_index = 1
+    match_drama_name = anchor_info.get("match_drama_name", None)
+    search_activity_input = page.locator(juji_jjss)
+    await search_activity_input.fill(search_title)
+    while time.time() - start_time < timeout:
+        try:
+            if page_index == 1:
+                # await search_activity_input.clear()
+                await search_activity_input.fill(search_title)
+                await asyncio.sleep(2)
+            await page.wait_for_selector('.drama-title', timeout=5000)
+
+            # 直接获取所有非禁用短剧项中的标题元素
+            drama_text_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-text').all()
+
+            # 遍历所有短剧标题元素
+            for text_element in drama_text_elements:
+                title_element = text_element.locator('.drama-title')
+                extinfo = await text_element.locator('.extinfo').text_content()
+                # 获取标题文本
+                text_content = await title_element.text_content()
+                tencent_logger.info(f'找到短剧标题：{text_content}')
+
+                # 检查标题是否匹配
+                if not jishu or (jishu and str(jishu) in extinfo):
+                    if match_drama_name:
+                        have_platlet = match_title == text_content
+                    else:
+                        have_platlet = match_title in text_content
+                else:
+                    have_platlet = False
+                if have_platlet:
+                    await title_element.evaluate('el => el.click()')
+                    tencent_logger.info(f'点击了匹配【{match_title}】的{jishu}短剧')
+                    found = True
+                    break
+
+            if found:
+                break
+
+            retry_count += 1
+
+            # 如果循环3次还没找到，尝试翻页
+            if retry_count >= 3:
+                # 查找下一页按钮
+                next_page = page.locator('a:has-text("下一页")')
+                if await next_page.count() > 0 and await next_page.is_visible():
+                    tencent_logger.info('当前页未找到，点击下一页继续查找')
+                    await next_page.click()
+                    # 重置重试计数
+                    retry_count = 0
+                    page_index += 1
+                    # 等待页面加载
+                    await asyncio.sleep(1)
+
+            tencent_logger.info('未找到匹配元素，等待0.5秒后重试...')
+            await asyncio.sleep(0.5)
+
+        except Exception as e:
+            tencent_logger.exception(f'查找高亮元素时发生错误')
+            await asyncio.sleep(0.5)
+            continue
+
+    if not found:
+        tencent_logger.error(f'超时{timeout}秒，未找到匹配【{match_title}】的短剧')
+        raise UpdateError(f"未找到匹配的短剧：{match_title}")
