@@ -86,29 +86,29 @@ class FingerprintManager:
                     {"name": "Widevine Content Decryption Module", "filename": "libwidevinecdm.dylib", "description": "Enables Widevine licenses"}
                 ]
             },
-            {
-                "type": "linux",
-                "user_agents": [
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (X11; Fedora; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ],
-                "platform": "Linux x86_64",
-                "os_name": "Linux",
-                "fonts": [
-                    "Arial", "Helvetica", "Times New Roman", "Courier New", "Verdana",
-                    "Georgia", "Palatino", "Garamond", "Bookman", "Tahoma",
-                    "Roboto", "Ubuntu", "Cantarell", "DejaVu Sans", "Liberation Sans",
-                    "Noto Sans CJK SC", "WenQuanYi Micro Hei"
-                ],
-                "plugins": [
-                    {"name": "Chrome PDF Plugin", "filename": "internal-pdf-viewer", "description": "Portable Document Format"},
-                    {"name": "Chrome PDF Viewer", "filename": "mhjfbmdgcfjbbpaeojofohoefgiehjai", "description": "Chrome PDF Viewer"},
-                    {"name": "Native Client", "filename": "internal-nacl-plugin", "description": "Native Client Executable"},
-                    {"name": "Widevine Content Decryption Module", "filename": "libwidevinecdm.so", "description": "Enables Widevine licenses"}
-                ]
-            }
+            # {
+            #     "type": "linux",
+            #     "user_agents": [
+            #         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            #         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            #         "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            #         "Mozilla/5.0 (X11; Fedora; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            #     ],
+            #     "platform": "Linux x86_64",
+            #     "os_name": "Linux",
+            #     "fonts": [
+            #         "Arial", "Helvetica", "Times New Roman", "Courier New", "Verdana",
+            #         "Georgia", "Palatino", "Garamond", "Bookman", "Tahoma",
+            #         "Roboto", "Ubuntu", "Cantarell", "DejaVu Sans", "Liberation Sans",
+            #         "Noto Sans CJK SC", "WenQuanYi Micro Hei"
+            #     ],
+            #     "plugins": [
+            #         {"name": "Chrome PDF Plugin", "filename": "internal-pdf-viewer", "description": "Portable Document Format"},
+            #         {"name": "Chrome PDF Viewer", "filename": "mhjfbmdgcfjbbpaeojofohoefgiehjai", "description": "Chrome PDF Viewer"},
+            #         {"name": "Native Client", "filename": "internal-nacl-plugin", "description": "Native Client Executable"},
+            #         {"name": "Widevine Content Decryption Module", "filename": "libwidevinecdm.so", "description": "Enables Widevine licenses"}
+            #     ]
+            # }
         ]
         
         # 定义地区配置，确保时区、语言、IP地理位置一致

@@ -73,7 +73,6 @@ async def set_init_script(context, cookie_name=None):
 
     # 注入人类行为模拟脚本
     await human_behavior.add_behavior_script(context)
-    await set_init_script1(context)
     # 增强反检测脚本
     basic_anti_detect_script = """
     // 增强反检测脚本
@@ -297,5 +296,5 @@ async def set_init_script(context, cookie_name=None):
             print(f"✅ 已为 {cookie_name} 注入浏览器指纹伪装")
         except Exception as e:
             print(f"❌ 注入浏览器指纹失败: {str(e)}")
-
+    await set_init_script1(context)
     return context
