@@ -379,7 +379,7 @@ class TencentVideo(object):
             except:
                 tencent_logger.exception('添加原创失败，不影响执行')
             should_delete = self.info and self.info.get("delete_platform_video", False) and (
-                         i < upload_count - 1)
+                    i < upload_count - 1)
             if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
                 self.title = f"waitdel-{random_uuid} {self.title}"
@@ -405,13 +405,13 @@ class TencentVideo(object):
             tencent_logger.success('  [-]cookie更新完毕！')
             if should_delete:
                 await self.delete_video(page)
+        if not (self.publish_date and self.publish_date != 0):
+            if self.info and self.info.get("auto_comment_enabled", False) and self.info.get("auto_comment_text", None) :
+                await add_comment(page,self.info.get("auto_comment_text", None))
         if self.info and self.info.get("delete_after_play", False):
             await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=5)
             # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
 
-        if not (self.publish_date and self.publish_date != 0):
-            if self.info and self.info.get("auto_comment_enabled", False) and self.info.get("auto_comment_text", None) :
-                await add_comment(page,self.info.get("auto_comment_text", None))
 
         # 关闭浏览器上下文和浏览器实例
         await context.close()
@@ -669,12 +669,9 @@ class TencentVideo(object):
             try:
                 # 检查是否超时
                 if time.time() - start_time > timeout:
-                    tencent_logger.warning("  [-] 发布操作超过两分钟，强制结束")
                     raise UpdateError(f"发布操作超过两分钟，强制结束{self.file_path}")
 
                 await asyncio.sleep(10)
-                tencent_logger.info("  [-] 开始检查编辑保留提示框...")
-
                 # 检查是否出现"将此次编辑保留?"文本
                 has_edit_retain = await page.locator('div:has-text("将此次编辑保留?")').count() > 0
                 tencent_logger.info(f"  [-] 是否找到编辑保留提示框: {has_edit_retain}")
@@ -683,8 +680,6 @@ class TencentVideo(object):
                     # 查找并点击"不保存"按钮，直接校验可见性
                     no_save_button = page.locator('button:has-text("不保存"):visible')
                     has_no_save_button = await no_save_button.count() > 0
-                    tencent_logger.info(f"  [-] 是否找到可见的不保存按钮: {has_no_save_button}")
-
                     if has_no_save_button:
                         await no_save_button.click()
                         await page.goto('https://channels.weixin.qq.com/platform/post/list')
@@ -693,7 +688,6 @@ class TencentVideo(object):
                     else:
                         tencent_logger.warning("  [-] 未找到可见的不保存按钮")
 
-                tencent_logger.info("  [-] 尝试点击发布按钮...")
                 up_button = pub_config.get('up_button')
                 publish_buttion = page.locator(up_button)
                 if await publish_buttion.count():
@@ -869,14 +863,11 @@ class TencentVideo(object):
                         await page.evaluate('''(container) => {
                             if (container) {
                                 const currentScrollTop = container.scrollTop;
-                                // 向上滚动约1/3的容器高度
                                 container.scrollTop = Math.max(0, currentScrollTop - container.clientHeight / 3);
                                 return { success: true, scrolledTo: container.scrollTop };
                             }
                             return { success: false };
                         }''', await scroll_container.element_handle())
-                        tencent_logger.info('已执行向上滚动操作')
-
                         # 再次等待
                         await asyncio.sleep(0.3)
 
@@ -895,7 +886,6 @@ class TencentVideo(object):
                             }
                             return { success: false };
                         }''', await scroll_container.element_handle())
-                        tencent_logger.info('已再次执行滚动到底部操作')
                     else:
                         tencent_logger.warning('找到滚动容器但无法获取位置信息')
                 else:

@@ -264,15 +264,6 @@ class HumanBehaviorSimulator:
                 });
             });
             
-            // === 5. 页面可见性变化 ===
-            let visibilityChanges = [];
-            
-            document.addEventListener('visibilitychange', function() {
-                visibilityChanges.push({
-                    hidden: document.hidden,
-                    time: Date.now()
-                });
-            });
             
             // === 6. 模拟人类行为统计 ===
             window.getHumanBehaviorStats = function() {
@@ -289,7 +280,6 @@ class HumanBehaviorSimulator:
                     keystrokes: keyTimings.length,
                     scrollEvents: scrollHistory.length,
                     focusChanges: focusHistory.length,
-                    visibilityChanges: visibilityChanges.length,
                     totalInteractionTime: Date.now() - (mouseHistory[0]?.time || Date.now())
                 };
             };

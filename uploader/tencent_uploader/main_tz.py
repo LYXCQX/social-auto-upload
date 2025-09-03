@@ -39,7 +39,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
     if not minutes_ago and not max_views:
         tencent_logger.info("[删除流程] 未设置删除条件，跳过删除")
         return
-
+    await page.goto('https://channels.weixin.qq.com/platform/post/list')
     tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 标题为{video_title} 且 页码为{page_index}")
     try:
         start_time = time.time()
@@ -133,8 +133,6 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                                 tencent_logger.info(f"[删除流程] => waitdel-视频符合删除条件")
                     else:
                         fail_video = await item.locator('.post-processed-fail').count()
-                        print(f'fail_video--{fail_video}')
-                        print(await item.inner_html())
                         if fail_video > 0:
                             should_delete = True
                             tencent_logger.info(f"[删除流程] => 错误视频符合删除条件")
@@ -364,7 +362,6 @@ async def add_comment(page, comment=None):
         comment_item = feed_items[0]
         comment_button = comment_item.locator('text=评论管理')
         if await comment_button.count() > 0:
-            tencent_logger.info(f"[评论流程] 找到符合条件的视频，准备删除")
             await comment_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
             # await page.click(':text-is("写评论 ")')
             await page.locator(':text-is("写评论 ")').evaluate('el => el.click()')
@@ -374,5 +371,6 @@ async def add_comment(page, comment=None):
             comment_element = page.locator(".create-ft >> text=评论")
             await comment_element.wait_for(state="visible", timeout=10000)
             await comment_element.evaluate('el => el.click()')
+            tencent_logger.info(f"[评论流程] 评论发布完毕")
     except Exception as e:
         tencent_logger.exception(f"[评论流程] 评论视频时出错：{str(e)}")
