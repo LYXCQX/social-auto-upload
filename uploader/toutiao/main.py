@@ -25,7 +25,7 @@ async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
         context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -96,7 +96,7 @@ async def toutiao_cookie_gen(account_file):
         }
         browser = await playwright.chromium.launch(**options)
         context = await browser.new_context()
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         page = await context.new_page()
 
         # 访问上传页面并等待登录
@@ -188,7 +188,7 @@ class TouTiaoVideo(object):
 
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(self.account_file))
 
         # 创建一个新的页面
         page = await context.new_page()

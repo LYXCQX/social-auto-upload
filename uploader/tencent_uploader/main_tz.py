@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import os
 import time
 from datetime import datetime
 
@@ -17,7 +18,7 @@ async def delete_video(local_executable_path, account_file, minutes_ago, max_vie
         browser = await playwright.chromium.launch(headless=False, executable_path=local_executable_path)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{account_file}")
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com/platform/post/list",timeout=300000)
@@ -289,7 +290,7 @@ async def add_short_play_by_juji(self, page,pub_config):
                 # await search_activity_input.clear()
                 await search_activity_input.fill(search_title)
                 await asyncio.sleep(2)
-            await page.wait_for_selector('.drama-title', timeout=5000)
+            # await page.wait_for_selector('.drama-title', timeout=5000)
 
             # 直接获取所有非禁用短剧项中的标题元素
             drama_text_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-text').all()

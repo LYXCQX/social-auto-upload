@@ -37,7 +37,7 @@ async def cookie_auth(account_file, local_executable_path=None,un_close=False):
         browser = await playwright.chromium.launch(headless=False if un_close else True,
                                                    executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -142,7 +142,7 @@ async def douyin_cookie_gen(account_file,local_executable_path=None):
                                                    executable_path=local_executable_path)
         # Setup context however you like.
         context = await browser.new_context(storage_state=f"{account_file}")  # Pass any options
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://creator.douyin.com/")
@@ -242,7 +242,7 @@ class DouYinVideo(object):
 
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(self.account_file))
         # 创建一个新的页面
         page = await context.new_page()
         # 动态获取屏幕尺寸

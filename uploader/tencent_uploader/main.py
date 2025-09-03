@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import random
 import time
 import uuid
 from datetime import datetime
@@ -51,7 +52,7 @@ async def cookie_auth(account_file, local_executable_path=None, un_close=False):
         browser = await playwright.chromium.launch(headless=False if un_close else True,
                                                    executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -96,7 +97,7 @@ async def get_tencent_cookie(account_file, local_executable_path=None):
         # Setup context however you like.
         context = await browser.new_context()  # Pass any options
         # Pause the page, and start recording manually.
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com")
         try:
@@ -218,7 +219,7 @@ class TencentVideo(object):
         file_input = page.locator(pub_config.get('up_file'))
         await file_input.set_input_files(self.file_path)
 
-    async def add_activity(self, page):
+    async def add_activity(self, page,type=1):
         if not self.info:
             return
 
@@ -305,7 +306,12 @@ class TencentVideo(object):
                 break
 
         if not found:
-            raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{match_title}")
+            if type == 1:
+                raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{match_title}")
+            else:
+                random_element = random.choice(activity_elements)
+                if random_element:
+                    random_element.click()
 
     async def upload(self, playwright: Playwright) -> tuple[bool, str]:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
@@ -322,7 +328,7 @@ class TencentVideo(object):
             no_viewport=False,
             bypass_csp=True
         )
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(self.account_file))
         msg_res = '检测通过，暂未发现异常'
         # 创建一个新的页面
         page = await context.new_page()
@@ -351,19 +357,22 @@ class TencentVideo(object):
             # 添加商品
             # await self.add_product(page)
             if self.info.get("enable_drama", False):
-                # 添加活动
-                if self.info.get("enable_baobai", False):
-                    await self.add_short_play_by_baobai(page)
-                elif self.info.get("enable_juji", False):
-                    if 1 < upload_count != i + 1:
-                        tencent_logger.info('，，，')
-                    else:
-                        await add_short_play_by_juji(self,page,pub_config)
-                else:
+                if self.info.get("enable_cps", False):
                     if 1 < upload_count != i + 1:
                         tencent_logger.info('，，，')
                     else:
                         await self.add_activity(page)
+                # 添加活动
+                if self.info.get("enable_baobai", False):
+                    await self.add_short_play_by_baobai(page)
+                elif self.info.get("enable_juji", False):
+                    # if 1 < upload_count != i + 1:
+                    #     tencent_logger.info('，，，')
+                    # else:
+                    if 1 < upload_count != i + 1:
+                        tencent_logger.info('，，，')
+                    else:
+                        await add_short_play_by_juji(self,page,pub_config)
             else:
                 tencent_logger.info('未选择挂短剧')
             try:

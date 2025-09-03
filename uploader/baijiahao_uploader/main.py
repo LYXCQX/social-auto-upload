@@ -25,7 +25,7 @@ async def baijiahao_cookie_gen(account_file):
         browser = await playwright.chromium.launch(**options)
         # Setup context however you like.
         context = await browser.new_context()  # Pass any options
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://baijiahao.baidu.com/builder/theme/bjh/login")
@@ -39,7 +39,7 @@ async def cookie_auth(account_file):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
         context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL

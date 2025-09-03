@@ -18,7 +18,7 @@ async def cookie_auth(account_file, local_executable_path=None):
         browser = await playwright.chromium.launch(headless=True,
                                                    executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
         page = await context.new_page()
         # 访问指定的 URL
@@ -104,7 +104,7 @@ async def juliang_cookie_gen(account_file, local_executable_path=None):
                                                    executable_path=local_executable_path)
         # Setup context however you like.
         context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context)
+        context = await set_init_script(context,os.path.basename(account_file))
         # Pause the page, and start recording manually.
         page = await context.new_page()
         await page.goto("https://www.xingtu.cn/?redirect_uri=https://www.xingtu.cn/sup/creator/user/overview")
