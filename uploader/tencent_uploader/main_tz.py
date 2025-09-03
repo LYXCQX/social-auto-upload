@@ -346,3 +346,33 @@ async def add_short_play_by_juji(self, page,pub_config):
     if not found:
         tencent_logger.error(f'超时{timeout}秒，未找到匹配【{match_title}】的短剧')
         raise UpdateError(f"未找到匹配的短剧：{match_title}")
+
+async def add_comment(page, comment=None):
+    try:
+        try:
+            tencent_logger.info("[评论流程] 等待视频列表加载")
+            await page.wait_for_selector('.post-feed-item', timeout=1000000)
+        except Exception as e:
+            tencent_logger.error(f"[评论流程] 等待视频列表加载超时: {str(e)}")
+            return
+
+        # 获取所有视频项
+        feed_items = await page.locator('.post-feed-item').filter(has_text='评论管理').all()
+        if not feed_items:
+            tencent_logger.warning("[评论流程] 未找到任何视频项")
+            return
+        comment_item = feed_items[0]
+        comment_button = comment_item.locator('text=评论管理')
+        if await comment_button.count() > 0:
+            tencent_logger.info(f"[评论流程] 找到符合条件的视频，准备删除")
+            await comment_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
+            # await page.click(':text-is("写评论 ")')
+            await page.locator(':text-is("写评论 ")').evaluate('el => el.click()')
+            search_activity_input = page.locator('textarea[placeholder="发表评论"]')
+            await search_activity_input.fill(comment)
+
+            comment_element = page.locator(".create-ft >> text=评论")
+            await comment_element.wait_for(state="visible", timeout=10000)
+            await comment_element.evaluate('el => el.click()')
+    except Exception as e:
+        tencent_logger.exception(f"[评论流程] 评论视频时出错：{str(e)}")

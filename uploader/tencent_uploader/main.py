@@ -21,7 +21,7 @@ from social_auto_upload.utils.log import tencent_logger
 
 from social_auto_upload.uploader.tencent_uploader.main_tz import add_original
 
-from src.publish.social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji
+from social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji, add_comment
 
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config', "{}")).get('tencent', {})
@@ -337,7 +337,6 @@ class TencentVideo(object):
             width: window.screen.availWidth,
             height: window.screen.availHeight
         })""")
-
         await page.set_viewport_size(screen_size)
         old_title = self.title
         upload_count = 1
@@ -409,6 +408,11 @@ class TencentVideo(object):
         if self.info and self.info.get("delete_after_play", False):
             await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=5)
             # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
+
+        if not (self.publish_date and self.publish_date != 0):
+            if self.info and self.info.get("auto_comment_enabled", False) and self.info.get("auto_comment_text", None) :
+                await add_comment(page,self.info.get("auto_comment_text", None))
+
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
