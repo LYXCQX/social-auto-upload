@@ -378,8 +378,7 @@ class TencentVideo(object):
                 await add_original(self, page)
             except:
                 tencent_logger.exception('添加原创失败，不影响执行')
-            should_delete = self.info and self.info.get("delete_platform_video", False) and (
-                    i < upload_count - 1)
+            should_delete = self.info and self.info.get("delete_platform_video", False) and (i < upload_count - 1)
             if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
                 self.title = f"waitdel-{random_uuid} {self.title}"

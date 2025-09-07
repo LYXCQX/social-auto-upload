@@ -360,7 +360,7 @@ async def add_comment(page, comment=None):
             tencent_logger.warning("[评论流程] 未找到任何视频项")
             return
         comment_item = feed_items[0]
-        comment_button = comment_item.locator('text=评论管理')
+        comment_button = comment_item.locator('text="评论管理"')
         if await comment_button.count() > 0:
             await comment_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
             # await page.click(':text-is("写评论 ")')
@@ -371,6 +371,9 @@ async def add_comment(page, comment=None):
             comment_element = page.locator(".create-ft >> text=评论")
             await comment_element.wait_for(state="visible", timeout=10000)
             await comment_element.evaluate('el => el.click()')
+            await page.wait_for_selector('text="置顶"', state='attached', timeout=5000)
+            zd_element = page.locator('text="置顶"')
+            await zd_element.evaluate('el => el.click()')
             tencent_logger.info(f"[评论流程] 评论发布完毕")
     except Exception as e:
         tencent_logger.exception(f"[评论流程] 评论视频时出错：{str(e)}")
