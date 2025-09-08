@@ -257,7 +257,7 @@ class DouYinVideo(object):
             playlet_title = anchor_info.get("title", None)
             playlet_title_tag = anchor_info.get("title_tag", None)
             auto_order = self.info.get("auto_order", None)
-            if self.info.get('use_xt'):
+            if self.info.get('douyin_publish_type') == '星图发布':
                 try:
                     # 创建一个浏览器上下文，使用指定的 cookie 文件
                     have_task, page = await xt_have_task(page, playlet_title,pub_config)
@@ -274,7 +274,7 @@ class DouYinVideo(object):
                 finally:
                     await context.storage_state(path=self.account_file)  # 保存cookie
                     douyin_logger.success('  星图cookie更新完毕！')
-            else:
+            elif self.info.get('douyin_publish_type') == '抖音发布':
                 if playlet_title:
                     have_task, page, n_url = await self.check_have_task(page, playlet_title, playlet_title_tag)
                     if not have_task:
@@ -286,6 +286,9 @@ class DouYinVideo(object):
                             raise UpdateError(f"没有找到任务标签:{playlet_title}，也没有开启自动接单，请先接取任务")
                     else:
                         douyin_logger.info('[+] 已经存在任务，继续处理')
+            elif self.info.get('douyin_publish_type') == '第三方':
+                #todo 待完善
+                print('第三方代码')
         else:
             # 访问指定的 URL
             await page.goto("https://creator.douyin.com/creator-micro/content/upload")
