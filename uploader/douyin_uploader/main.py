@@ -18,6 +18,7 @@ from social_auto_upload.utils.log import douyin_logger
 from social_auto_upload.uploader.douyin_uploader.main_tz import add_declaration, add_goods, get_title_tag
 
 from task_crawler import TaskCrawler, PlatformType, TaskType
+from social_auto_upload.uploader.douyin_uploader import fx_util
 
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
@@ -261,6 +262,10 @@ class DouYinVideo(object):
             auto_order = self.info.get("auto_order", None)
             if self.info.get('douyin_publish_type') == '星图发布' or self.info.get('douyin_publish_type') == '王牌智媒':
                 await self.xt_check_login(auto_order, context, page, playlet_title)
+            elif self.info.get('douyin_publish_type') == '分销发布':
+                # 分销发布逻辑 - 调用自动生成的发布方法
+                await fx_util.fx_publish(self.info, page,self)
+                return True,'分销发布成功'
             elif self.info.get('douyin_publish_type') == '抖音发布':
                 if playlet_title:
                     have_task, page, n_url = await self.check_have_task(page, playlet_title, playlet_title_tag)
