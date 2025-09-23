@@ -133,16 +133,26 @@ async def get_tencent_cookie(account_file, local_executable_path=None):
 async def get_user_id(page):
     start_time = time.time()  # 获取开始时间
     while True:
-        # 更新选择器以获取视频号ID
-        user_id = await page.locator('.finder-uniq-id').text_content()
-        user_id = user_id.strip()
-        if user_id == '0':
-            current_time = time.time()  # 获取当前时间
-            elapsed_time = current_time - start_time  # 计算已经过去的时间
-            if elapsed_time > 10:  # 如果已经过去的时间超过10秒
+        try:
+            # 更新选择器以获取视频号ID
+            user_id = await page.locator('.finder-uniq-id').text_content()
+            user_id = user_id.strip()
+            if user_id == '0':
+                current_time = time.time()  # 获取当前时间
+                elapsed_time = current_time - start_time  # 计算已经过去的时间
+                if elapsed_time > 10:  # 如果已经过去的时间超过10秒
+                    break  # 退出循环
+                # 添加延迟避免过于频繁的查询
+                await asyncio.sleep(0.5)
+            else:
                 break  # 退出循环
-        else:
-            break  # 退出循环
+        except Exception as e:
+            # 如果元素不存在或出现其他错误，等待后重试
+            current_time = time.time()
+            elapsed_time = current_time - start_time
+            if elapsed_time > 10:
+                break
+            await asyncio.sleep(0.5)
     return user_id
 
 
@@ -413,8 +423,13 @@ class TencentVideo(object):
 
 
         # 关闭浏览器上下文和浏览器实例
-        await context.close()
-        await browser.close()
+        try:
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
+        except Exception as e:
+            tencent_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
         return True, msg_res
 
     async def close_location(self, page):

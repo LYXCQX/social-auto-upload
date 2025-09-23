@@ -51,7 +51,7 @@ def get_mp4_files(folder_path):
     mp4_files = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if file.endswith(".mp4"):
+            if file.lower().endswith(".mp4"):
                 path = os.path.join(root, file)
                 mp4_files.append({"path": path, "file_name": file})
     return mp4_files
@@ -61,34 +61,38 @@ def get_json_files(folder_path):
     json_files = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if file.endswith(".json"):
+            if file.lower().endswith(".json"):
                 path = os.path.join(root, file)
                 json_files.append({"path": path, "file_name": file})
     return json_files
 
 
 def get_img_files(folder_path):
-    audio_files = []
+    """获取图片文件列表（保持递归功能）"""
+    img_files = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if (file.endswith(".jpg") or file.endswith(".jpeg")
-                    or file.endswith(".png") or file.endswith(".gif")
-                    or file.endswith(".raw") or file.endswith(".webp")
-                    or file.endswith(".tiff") or file.endswith(".svg")
-                    or file.endswith(".bmp")):
-                audio_files.append(os.path.join(root, file))
-    return audio_files
+            lower_file = file.lower()
+            if (lower_file.endswith(".jpg") or lower_file.endswith(".jpeg") or
+                lower_file.endswith(".png") or lower_file.endswith(".gif") or
+                lower_file.endswith(".raw") or lower_file.endswith(".webp") or
+                lower_file.endswith(".tiff") or lower_file.endswith(".svg") or
+                lower_file.endswith(".bmp")):
+                path = os.path.join(root, file)
+                img_files.append(path)
+    return img_files
 
 
 def get_font_files(folder_path):
+    """获取字体文件列表（保持递归功能）"""
     font_files = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if (file.endswith(tuple(".ttf")) or
-                    file.endswith(tuple(".woff")) or
-                    file.endswith(tuple(".woff2")) or
-                    file.endswith(tuple(".otf"))):
-                font_files.append(os.path.join(root, file))
+            lower_file = file.lower()
+            if (lower_file.endswith(".ttf") or lower_file.endswith(".woff") or
+                lower_file.endswith(".woff2") or lower_file.endswith(".otf")):
+                path = os.path.join(root, file)
+                font_files.append(path)
     return font_files
 
 
@@ -96,10 +100,12 @@ def get_audio_files(folder_path):
     audio_files = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if (file.endswith(tuple(".mp3")) or file.endswith(tuple(".wav"))
-                    or file.endswith(tuple(".flac")) or file.endswith(tuple(".aac"))
-                    or file.endswith(tuple(".ogg"))):
-                audio_files.append(os.path.join(root, file))
+            lower_file = file.lower()
+            if (lower_file.endswith(".mp3") or lower_file.endswith(".wav") or
+                lower_file.endswith(".flac") or lower_file.endswith(".aac") or
+                lower_file.endswith(".ogg")):
+                path = os.path.join(root, file)
+                audio_files.append(path)
     return audio_files
 
 def delete_files(file_paths):

@@ -70,8 +70,10 @@ async def cookie_auth(account_file, local_executable_path=None,un_close=False):
                     pass
                 finally:
                     try:
-                        await context.close()
-                        await browser.close()
+                        if context:
+                            await context.close()
+                        if browser:
+                            await browser.close()
                     except:
                         pass
             else:
@@ -128,15 +130,25 @@ async def check_login(page):
 async def get_user_id(page):
     start_time = time.time()  # 获取开始时间
     while True:
-        user_id = await page.locator('[class^="unique_id-"]:has-text("抖音号：")').text_content()
-        user_id = user_id.replace("抖音号：", "").strip()
-        if user_id == '0':
-            current_time = time.time()  # 获取当前时间
-            elapsed_time = current_time - start_time  # 计算已经过去的时间
-            if elapsed_time > 10:  # 如果已经过去的时间超过5秒
+        try:
+            user_id = await page.locator('[class^="unique_id-"]:has-text("抖音号：")').text_content()
+            user_id = user_id.replace("抖音号：", "").strip()
+            if user_id == '0':
+                current_time = time.time()  # 获取当前时间
+                elapsed_time = current_time - start_time  # 计算已经过去的时间
+                if elapsed_time > 10:  # 如果已经过去的时间超过10秒
+                    break  # 退出循环
+                # 添加延迟避免过于频繁的查询
+                await asyncio.sleep(0.5)
+            else:
                 break  # 退出循环
-        else:
-            break  # 退出循环
+        except Exception as e:
+            # 如果元素不存在或出现其他错误，等待后重试
+            current_time = time.time()
+            elapsed_time = current_time - start_time
+            if elapsed_time > 10:
+                break
+            await asyncio.sleep(0.5)
     return user_id
 
 
@@ -392,8 +404,13 @@ class DouYinVideo(object):
         douyin_logger.success('  [-]cookie更新完毕！')
         await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
         # 关闭浏览器上下文和浏览器实例
-        await context.close()
-        await browser.close()
+        try:
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
+        except Exception as e:
+            douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
         return True, msg_res
 
 

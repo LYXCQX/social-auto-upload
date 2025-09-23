@@ -35,8 +35,13 @@ async def cookie_auth(account_file, local_executable_path=None):
                 "https://www.xingtu.cn/sup/creator/user/overview", timeout=5000)
         except:
             douyin_logger.info("[+] 等待5秒 cookie 失效")
-            await context.close()
-            await browser.close()
+            try:
+                if context:
+                    await context.close()
+                if browser:
+                    await browser.close()
+            except Exception as e:
+                douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
             return False
         await asyncio.sleep(2)
         # 2024.06.17 抖音创作者中心改版
@@ -136,8 +141,13 @@ async def juliang_cookie_gen(account_file, local_executable_path=None):
         douyin_logger.info(f'---------{account_file}')
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=account_file)
-        await context.close()
-        await browser.close()
+        try:
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
+        except Exception as e:
+            douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
         return user_id, user_name, douyin_id
 async def xt_have_task(page, playlet_title,pub_config):
     await page.goto("https://www.xingtu.cn/sup/creator/user/task")
