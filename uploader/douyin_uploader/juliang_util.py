@@ -3,6 +3,8 @@ import asyncio
 import json
 import os
 import time
+from urllib.parse import unquote_plus
+
 from config import PLATFORM
 from config_manager import ConfigManager
 from dotenv import load_dotenv
@@ -194,46 +196,54 @@ async def xt_have_task(page, playlet_title,pub_config):
 
 
 
-async def xt_check_login(self, auto_order, context, page, playlet_title):
+async def xt_check_login(parent_, auto_order, context, page, playlet_title):
     try:
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         have_task, page = await xt_have_task(page, playlet_title, pub_config)
         if not have_task:
             if auto_order:
                 douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
-                if self.info.get('douyin_publish_type') == '王牌智媒':
-                    crawler = TaskCrawler([playlet_title], PlatformType.DOUYIN, local_executable_path=self.local_executable_path, task_type=TaskType.ALL,account_file=self.info.get('wp_account'))
+                if parent_.info.get('douyin_publish_type') == '王牌智媒':
+                    crawler = TaskCrawler([playlet_title], PlatformType.DOUYIN, local_executable_path=parent_.local_executable_path, task_type=TaskType.ALL,account_file=parent_.info.get('wp_account'))
                     task_url = await crawler.get_task_url()
-                    print(task_url)
                     if task_url:
-                        await page.goto(task_url)
+                        await page.goto(unquote_plus(task_url))
                         new_feature_button = page.locator('button[type="button"] span:text("我知道了")')
                         if await new_feature_button.count() > 0:
                             await new_feature_button.click()
-                        await page.click('text=" 参与投稿 ", text=" 预约投稿 "')
+                        task_detail_button = page.locator('button:has-text("任务详情"):visible')
+                        if await task_detail_button.count() == 0:
+                            tougao_b = page.locator('button:has-text("参与投稿"):visible, button:has-text("预约投稿"):visible')
+                            await tougao_b.evaluate('el => el.click()')
+                            douyin_logger.info('[+] 智能点击了存在的按钮')
 
-                        # 等待页面出现 aria-labelledby="确认是否参与任务" 的元素
-                        await page.wait_for_selector('[aria-labelledby="确认是否参与任务"]', state='visible', timeout=10000)
-                        qrcyrw = page.locator('[aria-labelledby="确认是否参与任务"]')
-                        # 检查是否有"已阅读并同意"文字，如果有则点击
-                        agree_checkbox = qrcyrw.locator('text="已阅读并同意"')
-                        if await agree_checkbox.count() > 0:
-                            await agree_checkbox.click()
-                            douyin_logger.info('[+] 点击了"已阅读并同意"复选框')
+                            # 等待页面出现 aria-labelledby="确认是否参与任务" 的元素
+                            await page.wait_for_selector('[aria-labelledby="确认是否参与任务"]', state='visible', timeout=10000)
+                            qrcyrw = page.locator('[aria-labelledby="确认是否参与任务"]')
+                            # 检查是否有"已阅读并同意"文字，如果有则点击
+                            agree_checkbox = qrcyrw.locator('text="已阅读并同意"')
+                            if await agree_checkbox.count() > 0:
+                                await agree_checkbox.click()
+                                douyin_logger.info('[+] 点击了"已阅读并同意"复选框')
 
-                        # 点击"参与投稿"按钮
-                        await qrcyrw.locator('text="参与投稿", text="立即预约"').click()
-                        await self.xt_check_login(auto_order, context, page, playlet_title)
+                            # 点击"参与投稿"按钮
+                            # await qrcyrw.locator('text="参与投稿", text="立即预约"').click()
+                            tougao = qrcyrw.locator('button:has-text("我要投稿"):visible, button:has-text("立即预约"):visible,button:has-text("参与投稿"):visible')
+                            await tougao.evaluate('el => el.click()')
+                            await asyncio.sleep(2)
+                        await xt_check_login(parent_, auto_order, context, page, playlet_title)
                     else:
                         raise UpdateError(f"王牌接单失败:{playlet_title}")
                 else:
-                    have_task, page, n_url = await self.new_xt_task(page, playlet_title)
+                    have_task, page, n_url = await parent_.new_xt_task(page, playlet_title)
             else:
                 douyin_logger.info('[+] 没有找到任务，也没有开启自动接单，直接返回')
                 raise UpdateError(f"没有找到任务标签:{playlet_title}，也没有开启自动接单，请先接取任务")
         else:
+            await asyncio.sleep(3)
             douyin_logger.info('[+] 已经存在任务，继续处理')
-            have_task, page, n_url = await self.click_go_to_upload(have_task, page)
+            have_task, page, n_url = await parent_.click_go_to_upload(have_task, page)
+        return page
     finally:
-        await context.storage_state(path=self.account_file)  # 保存cookie
+        await context.storage_state(path=parent_.account_file)  # 保存cookie
         douyin_logger.success('  星图cookie更新完毕！')

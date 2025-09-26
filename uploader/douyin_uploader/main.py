@@ -275,7 +275,7 @@ class DouYinVideo(object):
             playlet_title_tag = anchor_info.get("title_tag", None)
             auto_order = self.info.get("auto_order", None)
             if self.info.get('douyin_publish_type') == '星图发布' or self.info.get('douyin_publish_type') == '王牌智媒':
-                await xt_check_login(self,auto_order, context, page, playlet_title)
+               page = await xt_check_login(self,auto_order, context, page, playlet_title)
             elif self.info.get('douyin_publish_type') == '分销发布':
                 # 分销发布逻辑 - 调用自动生成的发布方法
                 await fx_util.fx_publish(self.info, page,self)
@@ -297,7 +297,7 @@ class DouYinVideo(object):
             await page.goto("https://creator.douyin.com/creator-micro/content/upload")
         douyin_logger.info(f'[+]正在上传-------{self.title}.mp4')
         # 等待页面跳转到指定的 URL，进入，则自动等待到超时
-        douyin_logger.info(f'[-] 正在打开主页...')
+        douyin_logger.info(f'[-] 正在打开主页...{page.url}')
         await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload*")
         # 检查提示文字是否存在
         while True:
