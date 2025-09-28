@@ -211,8 +211,9 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
                         new_feature_button = page.locator('button[type="button"] span:text("我知道了")')
                         if await new_feature_button.count() > 0:
                             await new_feature_button.click()
-                        task_detail_button = page.locator('button:has-text("任务详情"):visible')
-                        if await task_detail_button.count() == 0:
+                        # task_detail_button = page.locator('button:has-text("任务详情"):visible')
+                        rwxqc = await check_element_exists(page, 'button:has-text("任务详情"):visible')
+                        if not rwxqc:
                             tougao_b = page.locator('button:has-text("参与投稿"):visible, button:has-text("预约投稿"):visible')
                             await tougao_b.evaluate('el => el.click()')
                             douyin_logger.info('[+] 智能点击了存在的按钮')
@@ -247,3 +248,14 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
     finally:
         await context.storage_state(path=parent_.account_file)  # 保存cookie
         douyin_logger.success('  星图cookie更新完毕！')
+
+
+async def check_element_exists(page, selector, timeout=3000):
+    """
+    检查元素是否存在且可见
+    """
+    try:
+        await page.wait_for_selector(selector, timeout=timeout)
+        return True
+    except:
+        return False

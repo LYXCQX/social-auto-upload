@@ -397,7 +397,6 @@ class DouYinVideo(object):
                 break
             except:
                 douyin_logger.info("  [-] 视频正在发布中...")
-                await page.screenshot(full_page=True)
                 await asyncio.sleep(0.5)
 
         await context.storage_state(path=self.account_file)  # 保存cookie
