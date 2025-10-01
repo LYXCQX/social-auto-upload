@@ -15,7 +15,8 @@ from social_auto_upload.utils.bus_exception import UpdateError
 async def delete_video(local_executable_path, account_file, minutes_ago, max_views):
     async with async_playwright() as playwright:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
-        browser = await playwright.chromium.launch(headless=False, executable_path=local_executable_path)
+        browser = await playwright.chromium.launch(headless=False, executable_path=local_executable_path,
+                                                   args=[ "--single-process","--no-zygote",'--mute-audio'])
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{account_file}")
         context = await set_init_script(context,os.path.basename(account_file))
