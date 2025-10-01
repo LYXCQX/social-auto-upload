@@ -22,6 +22,8 @@ from social_auto_upload.uploader.douyin_uploader import fx_util
 
 from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_check_login
 
+from src.publish.social_auto_upload.conf import BASE_DIR
+
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
 # failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
@@ -256,7 +258,12 @@ class DouYinVideo(object):
                 proxy=self.proxy_setting,
                 args=['--start-maximized']  # 添加启动参数以最大化窗口
             )
-
+        if self.info.get('douyin_publish_type') == '分销':
+            fx_account_path = os.path.join(BASE_DIR, 'cookies', 'fx')
+            if not os.path.exists(fx_account_path):
+                os.makedirs(fx_account_path)
+            fx_account_file_name = self.info.get('wp_account')
+            self.account_file = os.path.join(fx_account_path, f'{fx_account_file_name}.json') if fx_account_file_name else None
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context,os.path.basename(self.account_file))
@@ -274,12 +281,13 @@ class DouYinVideo(object):
             playlet_title = anchor_info.get("title", None)
             playlet_title_tag = anchor_info.get("title_tag", None)
             auto_order = self.info.get("auto_order", None)
+            print(f"self.info.get('douyin_publish_type') :{self.info.get('douyin_publish_type') }")
             if self.info.get('douyin_publish_type') == '星图发布' or self.info.get('douyin_publish_type') == '王牌智媒':
                page = await xt_check_login(self,auto_order, context, page, playlet_title)
-            elif self.info.get('douyin_publish_type') == '分销发布':
+            elif self.info.get('douyin_publish_type') == '分销':
                 # 分销发布逻辑 - 调用自动生成的发布方法
-                await fx_util.fx_publish(self.info, page,self)
-                return True,'分销发布成功'
+                pub_files = await fx_util.fx_publish(self.info, page,self)
+                return True,pub_files
             elif self.info.get('douyin_publish_type') == '抖音发布':
                 if playlet_title:
                     have_task, page, n_url = await self.check_have_task(page, playlet_title, playlet_title_tag)
