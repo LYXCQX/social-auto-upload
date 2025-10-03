@@ -22,7 +22,7 @@ from social_auto_upload.uploader.douyin_uploader import fx_util
 
 from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_check_login
 
-from src.publish.social_auto_upload.conf import BASE_DIR
+from social_auto_upload.conf import BASE_DIR
 
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
