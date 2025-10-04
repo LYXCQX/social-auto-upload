@@ -214,7 +214,7 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
                         # task_detail_button = page.locator('button:has-text("任务详情"):visible')
                         rwxqc = await check_element_exists(page, 'button:has-text("任务详情"):visible')
                         if not rwxqc:
-                            tougao_b = page.locator('button:has-text("参与投稿"):visible, button:has-text("预约投稿"):visible')
+                            tougao_b = page.locator('button:has-text("参与投稿"), button:has-text("预约投稿")')
                             await tougao_b.evaluate('el => el.click()')
                             douyin_logger.info('[+] 智能点击了存在的按钮')
 
@@ -229,8 +229,8 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
 
                             # 点击"参与投稿"按钮
                             # await qrcyrw.locator('text="参与投稿", text="立即预约"').click()
-                            tougao = qrcyrw.locator('button:has-text("我要投稿"):visible, button:has-text("立即预约"):visible,button:has-text("参与投稿"):visible')
-                            douyin_logger.info('[+] 点击了"已阅读并同意"复选框')
+                            tougao = qrcyrw.locator('button:has-text("我要投稿"), button:has-text("立即预约"),button:has-text("参与投稿")')
+                            douyin_logger.info(f'[+] 找到了投稿按钮 {await tougao.count()}')
                             await tougao.evaluate('el => el.click()')
                             await asyncio.sleep(2)
                         await xt_check_login(parent_, auto_order, context, page, playlet_title)
