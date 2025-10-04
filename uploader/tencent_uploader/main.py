@@ -50,8 +50,7 @@ def format_str_for_short_title(origin_title: str) -> str:
 async def cookie_auth(account_file, local_executable_path=None, un_close=False):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=False if un_close else True,
-                                                   executable_path=local_executable_path,
-                                                   args=[ "--single-process","--no-zygote",'--mute-audio'])
+                                                   executable_path=local_executable_path)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
@@ -88,8 +87,6 @@ async def get_tencent_cookie(account_file, local_executable_path=None):
     async with async_playwright() as playwright:
         options = {
             'args': [
-                "--single-process",
-                "--no-zygote",
                 '--lang en-GB'
             ],
             'headless': False,  # Set headless option here
@@ -331,9 +328,7 @@ class TencentVideo(object):
         browser = await playwright.chromium.launch(
             headless=False,
             executable_path=self.local_executable_path,
-            proxy=self.proxy_setting,
-            args=[ "--single-process","--no-zygote",'--mute-audio']  # 设置浏览器静音
-        )
+            proxy=self.proxy_setting)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
