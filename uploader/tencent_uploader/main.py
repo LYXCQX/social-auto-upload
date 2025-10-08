@@ -47,10 +47,10 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
-async def cookie_auth(account_file, local_executable_path=None, un_close=False):
+async def cookie_auth(account_file, local_executable_path=None, un_close=False,proxy_setting=None):
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=False if un_close else True,
-                                                   executable_path=local_executable_path)
+                                                   executable_path=local_executable_path,proxy=proxy_setting)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
@@ -83,14 +83,15 @@ async def cookie_auth(account_file, local_executable_path=None, un_close=False):
             return False
 
 
-async def get_tencent_cookie(account_file, local_executable_path=None):
+async def get_tencent_cookie(account_file, local_executable_path=None,proxy_setting=None):
     async with async_playwright() as playwright:
         options = {
             'args': [
                 '--lang en-GB'
             ],
             'headless': False,  # Set headless option here
-            'executable_path': local_executable_path
+            'executable_path': local_executable_path,
+            'proxy':proxy_setting
         }
         # Make sure to run headed.
         browser = await playwright.chromium.launch(**options)
@@ -156,15 +157,15 @@ async def get_user_id(page):
     return user_id
 
 
-async def weixin_setup(account_file, handle=False, local_executable_path=None):
+async def weixin_setup(account_file, handle=False, local_executable_path=None,proxy_setting=None):
     # account_file = get_absolute_path(account_file, "tencent_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file,
-                                                                 local_executable_path=local_executable_path):
+                                                                 local_executable_path=local_executable_path,proxy_setting=proxy_setting):
         if not handle:
             # Todo alert message
             return False, None, None
         tencent_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name = await get_tencent_cookie(account_file, local_executable_path=local_executable_path)
+        user_id, user_name = await get_tencent_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)

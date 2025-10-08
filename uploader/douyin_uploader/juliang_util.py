@@ -20,12 +20,12 @@ load_dotenv()
 
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config',"{}")).get('douyin',{})
-async def cookie_auth(account_file, local_executable_path=None):
+async def cookie_auth(account_file, local_executable_path=None,proxy_setting=None):
     if not local_executable_path or not os.path.exists(local_executable_path):
         douyin_logger.warning(f"浏览器路径无效: {local_executable_path}")
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True,
-                                                   executable_path=local_executable_path)
+                                                   executable_path=local_executable_path,proxy=proxy_setting)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
@@ -55,13 +55,13 @@ async def cookie_auth(account_file, local_executable_path=None):
             return True
 
 
-async def juliang_setup(account_file, handle=False, local_executable_path=None):
-    if (account_file and not os.path.exists(account_file)) or not await cookie_auth(account_file, local_executable_path):
+async def juliang_setup(account_file, handle=False, local_executable_path=None, proxy_setting=None):
+    if (account_file and not os.path.exists(account_file)) or not await cookie_auth(account_file, local_executable_path,proxy_setting):
         if not handle:
             # Todo alert message
             return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name, douyin_id = await juliang_cookie_gen(account_file, local_executable_path)
+        user_id, user_name, douyin_id = await juliang_cookie_gen(account_file, local_executable_path,proxy_setting)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
@@ -111,11 +111,11 @@ async def get_user_id(page):
     return user_id, douyin_id
 
 
-async def juliang_cookie_gen(account_file, local_executable_path=None):
+async def juliang_cookie_gen(account_file, local_executable_path=None, proxy_setting=None):
     async with async_playwright() as playwright:
         # Make sure to run headed.
         browser = await playwright.chromium.launch(headless=False,
-                                                   executable_path=local_executable_path)
+                                                   executable_path=local_executable_path,proxy=proxy_setting)
         # Setup context however you like.
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context,os.path.basename(account_file))
