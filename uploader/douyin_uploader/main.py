@@ -37,12 +37,12 @@ import json
 
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config',"{}")).get('douyin',{})
-async def cookie_auth(account_file, local_executable_path=None,un_close=False,proxy_settings=None):
+async def cookie_auth(account_file, local_executable_path=None,un_close=False,proxy_setting=None):
     if not local_executable_path or not os.path.exists(local_executable_path):
         douyin_logger.warning(f"浏览器路径无效: {local_executable_path}")
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=False if un_close else True,
-                                                   executable_path=local_executable_path,proxy=proxy_settings)
+                                                   executable_path=local_executable_path,proxy=proxy_setting)
         context = await browser.new_context(storage_state=account_file)
         context = await set_init_script(context,os.path.basename(account_file))
         # 创建一个新的页面
@@ -85,12 +85,12 @@ async def cookie_auth(account_file, local_executable_path=None,un_close=False,pr
 
 
 async def douyin_setup(account_file, handle=False, local_executable_path=None,proxy_setting=None):
-    if not os.path.exists(account_file) or not await cookie_auth(account_file,local_executable_path,proxy_setting=pub_config.get('proxy',None)):
+    if not os.path.exists(account_file) or not await cookie_auth(account_file,local_executable_path,proxy_setting=proxy_setting):
         if not handle:
             # Todo alert message
             return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name, response_data = await douyin_cookie_gen(account_file,local_executable_path,proxy_setting=pub_config.get('proxy',None))
+        user_id, user_name, response_data = await douyin_cookie_gen(account_file,local_executable_path,proxy_setting=proxy_setting)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
@@ -281,7 +281,6 @@ class DouYinVideo(object):
             playlet_title = anchor_info.get("title", None)
             playlet_title_tag = anchor_info.get("title_tag", None)
             auto_order = self.info.get("auto_order", None)
-            print(f"self.info.get('douyin_publish_type') :{self.info.get('douyin_publish_type') }")
             if self.info.get('douyin_publish_type') == '星图发布' or self.info.get('douyin_publish_type') == '王牌智媒':
                page = await xt_check_login(self,auto_order, context, page, playlet_title)
             elif self.info.get('douyin_publish_type') == '分销':

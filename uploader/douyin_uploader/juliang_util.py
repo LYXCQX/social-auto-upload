@@ -232,8 +232,12 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
                             tougao = qrcyrw.locator('button:has-text("我要投稿"), button:has-text("立即预约"),button:has-text("参与投稿")')
                             douyin_logger.info(f'[+] 找到了投稿按钮 {await tougao.count()}')
                             await tougao.evaluate('el => el.click()')
-                            await asyncio.sleep(2)
-                        await xt_check_login(parent_, auto_order, context, page, playlet_title)
+                            # await asyncio.sleep(2)
+                            try:
+                                await page.wait_for_selector('button:has-text("任务详情")', state='visible', timeout=10000)
+                            except:
+                                douyin_logger.exception('[+] 等待任务详情失败')
+                        page = await xt_check_login(parent_, auto_order, context, page, playlet_title)
                     else:
                         raise UpdateError(f"王牌接单失败:{playlet_title}")
                 else:
