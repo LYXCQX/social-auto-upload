@@ -204,7 +204,12 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
             if auto_order:
                 douyin_logger.info('[+] 检测到不在上传页面，需要新建任务')
                 if parent_.info.get('douyin_publish_type') == '王牌智媒':
-                    crawler = TaskCrawler([playlet_title], PlatformType.DOUYIN, local_executable_path=parent_.local_executable_path, task_type=TaskType.ALL,account_file=parent_.info.get('wp_account'))
+                    task_type = parent_.info.get('task_type_filter',TaskType.ALL)
+                    commission_type=parent_.info.get('commission_type_filter')
+                    publish_status=parent_.info.get('publish_status_filter')
+                    star_ad_support=parent_.info.get('star_ad_support_filter')
+                    reward_support=parent_.info.get('reward_support_filter')
+                    crawler = TaskCrawler([playlet_title], PlatformType.DOUYIN, local_executable_path=parent_.local_executable_path, task_type=task_type,account_file=parent_.info.get('wp_account'),commission_type=commission_type,publish_status=publish_status,star_ad_support=star_ad_support,reward_support=reward_support)
                     task_url = await crawler.get_task_url()
                     if task_url:
                         await page.goto(unquote_plus(task_url))
