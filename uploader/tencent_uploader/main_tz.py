@@ -235,7 +235,7 @@ async def add_original(parent_, page):
 #     return post_time
 
 
-async def add_short_play_by_juji(self, page,pub_config):
+async def add_short_play_by_juji(parent_, page,pub_config):
     # 等待并点击"选择链接"按钮
     baobai_lj = pub_config.get('baobai_lj')
     juji_jjxl = pub_config.get('juji_jjxl')
@@ -252,7 +252,7 @@ async def add_short_play_by_juji(self, page,pub_config):
     # 等待输入框出现
     await page.wait_for_selector(juji_jjss, state='visible', timeout=5000)
     await page.click(juji_jjss)
-    anchor_info = self.info.get("anchor_info", None)
+    anchor_info = parent_.info.get("anchor_info", None)
     if not anchor_info:
         raise UpdateError(f"未找到挂短剧参数：{anchor_info}")
 
