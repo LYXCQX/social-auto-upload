@@ -217,15 +217,18 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
                         if await new_feature_button.count() > 0:
                             await new_feature_button.click()
                         # task_detail_button = page.locator('button:has-text("任务详情"):visible')
-                        rwxqc = await check_element_exists(page, 'button:has-text("任务详情"):visible')
+                        xt_sj_xq = pub_config.get('xt_sj_xq')
+                        rwxqc = await check_element_exists(page, xt_sj_xq)
                         if not rwxqc:
-                            tougao_b = page.locator('button:has-text("参与投稿"), button:has-text("预约投稿")')
+                            sj_cytg = pub_config.get('sj_cytg')
+                            tougao_b = page.locator(sj_cytg)
                             await tougao_b.evaluate('el => el.click()')
                             douyin_logger.info('[+] 智能点击了存在的按钮')
 
                             # 等待页面出现 aria-labelledby="确认是否参与任务" 的元素
-                            await page.wait_for_selector('[aria-labelledby="确认是否参与任务"]', state='visible', timeout=10000)
-                            qrcyrw = page.locator('[aria-labelledby="确认是否参与任务"]')
+                            sj_sfcyrw = pub_config.get('sj_sfcyrw')
+                            await page.wait_for_selector(sj_sfcyrw, state='visible', timeout=10000)
+                            qrcyrw = page.locator(sj_sfcyrw)
                             # 检查是否有"已阅读并同意"文字，如果有则点击
                             agree_checkbox = qrcyrw.locator('text="已阅读并同意"')
                             if await agree_checkbox.count() > 0:
@@ -234,12 +237,13 @@ async def xt_check_login(parent_, auto_order, context, page, playlet_title):
 
                             # 点击"参与投稿"按钮
                             # await qrcyrw.locator('text="参与投稿", text="立即预约"').click()
-                            tougao = qrcyrw.locator('button:has-text("我要投稿"), button:has-text("立即预约"),button:has-text("参与投稿")')
+                            sj_djtg = pub_config.get('sj_djtg')
+                            tougao = qrcyrw.locator(sj_djtg)
                             douyin_logger.info(f'[+] 找到了投稿按钮 {await tougao.count()}')
                             await tougao.evaluate('el => el.click()')
                             # await asyncio.sleep(2)
                             try:
-                                await page.wait_for_selector('button:has-text("任务详情")', state='visible', timeout=10000)
+                                await page.wait_for_selector(xt_sj_xq, state='visible', timeout=10000)
                             except:
                                 douyin_logger.exception('[+] 等待任务详情失败')
                         page = await xt_check_login(parent_, auto_order, context, page, playlet_title)

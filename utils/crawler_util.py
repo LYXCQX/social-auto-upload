@@ -1,33 +1,15 @@
-# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：  
-# 1. 不得用于任何商业用途。  
-# 2. 使用时应遵守目标平台的使用条款和robots.txt规则。  
-# 3. 不得进行大规模爬取或对平台造成运营干扰。  
-# 4. 应合理控制请求频率，避免给目标平台带来不必要的负担。   
-# 5. 不得用于任何非法或不当的用途。
-#   
-# 详细许可条款请参阅项目根目录下的LICENSE文件。  
-# 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。  
-
-
-# -*- coding: utf-8 -*-
-# @Author  : relakkes@gmail.com
-# @Time    : 2023/12/2 12:53
-# @Desc    : 爬虫相关的工具函数
-
 import base64
-import json
 import random
 import re
 import urllib
 import urllib.parse
 from io import BytesIO
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 from PIL import Image, ImageDraw, ImageShow
 from playwright.async_api import Cookie, Page
-
-# from src.publish.Douyin_TikTok_Download_API.crawlers.utils import utils
+from social_auto_upload.utils.log import douyin_logger
 
 
 async def find_login_qrcode(page: Page, selector: str) -> str:
@@ -39,7 +21,7 @@ async def find_login_qrcode(page: Page, selector: str) -> str:
         login_qrcode_img = str(await elements.get_property("src"))  # type: ignore
         if "http://" in login_qrcode_img or "https://" in login_qrcode_img:
             async with httpx.AsyncClient(follow_redirects=True) as client:
-                utils.logger.info(f"[find_login_qrcode] get qrcode by url:{login_qrcode_img}")
+                douyin_logger.info(f"[find_login_qrcode] get qrcode by url:{login_qrcode_img}")
                 resp = await client.get(login_qrcode_img, headers={"User-Agent": get_user_agent()})
                 if resp.status_code == 200:
                     image_data = resp.content
