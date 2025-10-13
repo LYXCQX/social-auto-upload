@@ -11,6 +11,7 @@ from playwright.async_api import Playwright, async_playwright, Page
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_have_task
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_DOUYIN
+from social_auto_upload.utils.crawler_util import convert_cookies
 from social_auto_upload.utils.bus_exception import UpdateError, BusError
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
@@ -85,18 +86,20 @@ async def cookie_auth(account_file, local_executable_path=None,un_close=False,pr
 
 
 async def douyin_setup(account_file, handle=False, local_executable_path=None,proxy_setting=None):
+    cookie_str = None
+    response_data = None
     if not os.path.exists(account_file) or not await cookie_auth(account_file,local_executable_path,proxy_setting=proxy_setting):
         if not handle:
             # Todo alert message
             return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name, response_data = await douyin_cookie_gen(account_file,local_executable_path,proxy_setting=proxy_setting)
+        user_id, user_name, response_data,cookie_str = await douyin_cookie_gen(account_file,local_executable_path,proxy_setting=proxy_setting)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
         user_id, user_name = base_name.split('_')[:2]  # 假设文件名格式为 "user_id_user_name_account.json"
 
-    return True, user_id, user_name, None
+    return True, user_id, user_name, response_data,cookie_str
 
 async def check_login(page):
     # 开始检测条件
@@ -189,6 +192,7 @@ async def douyin_cookie_gen(account_file,local_executable_path=None, proxy_setti
         loguru.logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_DOUYIN, user_name))
+        cookie_str, cookie_dict = convert_cookies(await context.cookies())
         response_data = None
 
         async def handle_route(route):
@@ -202,7 +206,7 @@ async def douyin_cookie_gen(account_file,local_executable_path=None, proxy_setti
             await route.continue_()
         await context.close()
         await browser.close()
-        return user_id, user_name, response_data
+        return user_id, user_name, response_data,cookie_str
 
 
 
