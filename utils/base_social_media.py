@@ -33,28 +33,28 @@ async def set_init_script1(context):
     """设置初始化脚本"""
     try:
         # 获取程序运行目录
-        if getattr(sys, 'frozen', False):
-            # 如果是打包后的 exe 运行
-            base_dir = Path(sys.executable).parent
-            stealth_path = base_dir / 'utils' / 'stealth.min.js'
-        else:
-            # 如果是源码运行，尝试多个可能的路径
-            possible_paths = [
-                Path(BASE_DIR / "utils/stealth.min.js"),
-                Path(BASE_DIR / "social_auto_upload/utils/stealth.min.js"),
-            ]
-            
-            # 尝试所有路径
-            stealth_path = None
-            for path in possible_paths:
-                if path.exists():
-                    stealth_path = path
-                    break
-                    
-            if not stealth_path:
-                paths_str = '\n'.join(str(p) for p in possible_paths)
-                raise FileNotFoundError(f"找不到文件，尝试过的路径:\n{paths_str}")
-        
+        # if getattr(sys, 'frozen', False):
+        #     # 如果是打包后的 exe 运行
+        #     base_dir = Path(sys.executable).parent
+        #     stealth_path = base_dir / 'utils' / 'stealth.min.js'
+        # else:
+        #     # 如果是源码运行，尝试多个可能的路径
+        #     possible_paths = [
+        #         Path(BASE_DIR / "utils/stealth.min.js"),
+        #         Path(BASE_DIR / "social_auto_upload/utils/stealth.min.js"),
+        #     ]
+        #
+        #     # 尝试所有路径
+        #     stealth_path = None
+        #     for path in possible_paths:
+        #         if path.exists():
+        #             stealth_path = path
+        #             break
+        #
+        #     if not stealth_path:
+        #         paths_str = '\n'.join(str(p) for p in possible_paths)
+        #         raise FileNotFoundError(f"找不到文件，尝试过的路径:\n{paths_str}")
+        stealth_path = BASE_DIR / 'utils' / 'stealth.min.js'
         if not stealth_path.exists():
             raise FileNotFoundError(f"找不到文件: {stealth_path}")
             

@@ -198,15 +198,15 @@ def get_account_file(user_id, platform, user_name=None, *suffixes):
         *suffixes: 可变数量的后缀参数
     """
     # 获取程序运行目录
-    if getattr(sys, 'frozen', False):
-        # 如果是打包后的 exe 运行
-        base_dir = Path(sys.executable).parent
-    else:
-        # 如果是源码运行
-        base_dir = BASE_DIR
+    # if getattr(sys, 'frozen', False):
+    #     # 如果是打包后的 exe 运行
+    #     base_dir = Path(sys.executable).parent
+    # else:
+    #     # 如果是源码运行
+    #     base_dir = BASE_DIR
     
     # 获取cookies/platform_uploader目录下所有以user_id开头的json文件
-    cookie_dir = Path(base_dir / "cookies" / f"{platform}_uploader")
+    cookie_dir = Path(BASE_DIR / "cookies" / f"{platform}_uploader")
     
     # 确保cookie_dir目录存在
     if not cookie_dir.exists():
@@ -230,16 +230,16 @@ def get_account_file(user_id, platform, user_name=None, *suffixes):
 def create_missing_dirs(folder_path):
     """创建缺失的目录"""
     # 获取程序运行目录
-    if getattr(sys, 'frozen', False):
-        # 如果是打包后的 exe 运行
-        base_dir = Path(sys.executable).parent
-    else:
-        # 如果是源码运行
-        base_dir = BASE_DIR
+    # if getattr(sys, 'frozen', False):
+    #     # 如果是打包后的 exe 运行
+    #     base_dir = Path(sys.executable).parent
+    # else:
+    #     # 如果是源码运行
+    #     base_dir = BASE_DIR
         
     # 确保目录存在
     for dir_name in ['cookies', 'logs', 'utils']:
-        dir_path = base_dir / dir_name
+        dir_path = BASE_DIR / dir_name
         if not dir_path.exists():
             dir_path.mkdir(parents=True)
             loguru.logger.info(f"文件夹 {dir_path} 创建成功")

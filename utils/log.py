@@ -5,17 +5,19 @@ from pathlib import Path
 from loguru import logger
 from config import PLATFORM_UPLOAD
 
+from social_auto_upload.conf import BASE_DIR
+
 # 获取程序运行目录
-if getattr(sys, 'frozen', False):
-    # 如果是打包后的 exe 运行
-    base_dir = Path(sys.executable).parent
-else:
-    # 如果是源码运行
-    from social_auto_upload.conf import BASE_DIR
-    base_dir = BASE_DIR
+# if getattr(sys, 'frozen', False):
+#     # 如果是打包后的 exe 运行
+#     base_dir = Path(sys.executable).parent
+# else:
+#     # 如果是源码运行
+#     from social_auto_upload.conf import BASE_DIR
+#     base_dir = BASE_DIR
 
 # 创建日志目录
-log_dir = base_dir / 'logs'
+log_dir = BASE_DIR / 'logs'
 log_dir.mkdir(parents=True, exist_ok=True)
 
 def log_formatter(record: dict) -> str:
@@ -54,7 +56,7 @@ def create_logger(log_name: str, file_path: str):
     def filter_record(record):
         return record["extra"].get("business_name") == log_name
 
-    log_file = base_dir / file_path
+    log_file = BASE_DIR / file_path
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger.add(str(log_file), filter=filter_record, level="INFO",
               rotation="10 MB", retention="3 days",  # 保留3天的日志，自动清理3天前的日志
