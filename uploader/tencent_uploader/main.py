@@ -9,6 +9,8 @@ from datetime import datetime
 import re
 
 import loguru
+from browserforge.fingerprints import FingerprintGenerator
+from camoufox import AsyncCamoufox
 from config import PLATFORM
 from config_manager import ConfigManager
 from patchright.async_api import Playwright, async_playwright
@@ -324,18 +326,16 @@ class TencentVideo(object):
                 if random_element:
                     random_element.click()
 
-    async def upload(self, playwright: Playwright) -> tuple[bool, str]:
-        # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
-        browser = await playwright.chromium.launch(
-            headless=False,
-            executable_path=self.local_executable_path,
-            proxy=self.proxy_setting)
+    async def upload(self, playwright: Playwright,browser) -> tuple[bool, str]:
+        if playwright:
+            # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
+            browser = await playwright.chromium.launch(
+                headless=False,
+                executable_path=self.local_executable_path,
+                proxy=self.proxy_setting)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(
             storage_state=f"{self.account_file}",
-            viewport={'width': 1280, 'height': 720},
-            no_viewport=False,
-            bypass_csp=True
         )
         context = await set_init_script(context,os.path.basename(self.account_file))
         msg_res = '检测通过，暂未发现异常'
@@ -913,8 +913,21 @@ class TencentVideo(object):
 
 
     async def main(self):
-        async with async_playwright() as playwright:
-            return await self.upload(playwright)
+        if self.info.get("camoufox",False):
+            addons_path = self.info.get("addons_path")
+            addons = []
+            if addons_path:
+                addons = [str(item) for item in addons_path.iterdir() if item.is_dir()]
+            fg = FingerprintGenerator(browser='firefox', os=('windows', 'macos'),
+                                      device='desktop',
+                                      )
+
+            with AsyncCamoufox(os=["windows", "macos"], humanize=True, addons=addons, enable_cache=True, geoip=True,
+                               proxy=self.proxy_setting,fingerprint=fg.generate()) as browser:
+                return await self.upload(None,browser)
+        else:
+            async with async_playwright() as playwright:
+                return await self.upload(playwright)
 
 # def normalize_post_time(post_time: str) -> str:
 #     """标准化发布时间格式，便于比较"""
