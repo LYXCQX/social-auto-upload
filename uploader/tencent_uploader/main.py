@@ -478,7 +478,7 @@ class TencentVideo(object):
                                 tencent_logger.info(f"[删除流程] 超时找到删除按钮，准备删除视频")
                                 await delete_button.locator('..').locator('.opr-item').evaluate(
                                     'el => el.click()')
-                                await page.click(':text-is("确定")')
+                                await page.click(':text-is("确定"):visible')
                                 await asyncio.sleep(2)
                         tencent_logger.warning(f"[删除流程] 删除操作超过{timeout}秒，自动结束")
                         break
@@ -538,7 +538,7 @@ class TencentVideo(object):
                                         tencent_logger.info(f"[删除流程] 找到删除按钮，准备删除视频")
                                         await delete_button.locator('..').locator('.opr-item').evaluate(
                                             'el => el.click()')
-                                        await page.click(':text-is("确定")')
+                                        await page.click(':text-is("确定"):visible')
                                         found_video = True
                                         is_first_time = True
                                         await asyncio.sleep(2)

@@ -142,7 +142,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                         if await delete_button.count() > 0:
                             tencent_logger.info(f"[删除流程] 找到符合条件的视频，准备删除")
                             await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
-                            await page.click(':text-is("确定")')
+                            await page.click(':text-is("确定"):visible')
                             deleted_count += 1
                             await asyncio.sleep(2)
                             # 删除后重新获取视频列表
