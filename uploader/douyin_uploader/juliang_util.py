@@ -8,7 +8,7 @@ from urllib.parse import unquote_plus
 from config import PLATFORM
 from config_manager import ConfigManager
 from dotenv import load_dotenv
-from playwright.async_api import async_playwright
+from patchright.async_api import async_playwright
 from social_auto_upload.utils.base_social_media import set_init_script
 from social_auto_upload.utils.log import douyin_logger
 

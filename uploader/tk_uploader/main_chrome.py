@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from typing import Tuple
 
-from playwright.async_api import Playwright, async_playwright
+from patchright.async_api import Playwright, async_playwright
 import os
 import asyncio
 

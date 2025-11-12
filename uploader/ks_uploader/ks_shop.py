@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Tuple
 
 import loguru
-from playwright.async_api import Playwright, async_playwright, Page
+from patchright.async_api import Playwright, async_playwright, Page
 import os
 import asyncio
 

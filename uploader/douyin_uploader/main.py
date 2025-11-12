@@ -7,7 +7,7 @@ from typing import Any
 
 import loguru
 from dotenv import load_dotenv
-from playwright.async_api import Playwright, async_playwright, Page
+from patchright.async_api import Playwright, async_playwright, Page
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_have_task
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_DOUYIN

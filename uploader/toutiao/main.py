@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Tuple, Any
 
 import loguru
-from playwright.async_api import Playwright, async_playwright, Page
+from patchright.async_api import Playwright, async_playwright, Page
 import os
 import asyncio
 from dotenv import load_dotenv

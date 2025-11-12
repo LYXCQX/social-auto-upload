@@ -4,7 +4,7 @@ import os
 import time
 from datetime import datetime
 
-from playwright.async_api import async_playwright
+from patchright.async_api import async_playwright
 from social_auto_upload.utils.log import tencent_logger
 
 from social_auto_upload.utils.base_social_media import set_init_script

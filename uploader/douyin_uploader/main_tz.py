@@ -1,4 +1,4 @@
-from playwright.async_api import Page
+from patchright.async_api import Page
 from social_auto_upload.utils.log import douyin_logger
 
 

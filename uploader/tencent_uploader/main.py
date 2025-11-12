@@ -11,7 +11,7 @@ import re
 import loguru
 from config import PLATFORM
 from config_manager import ConfigManager
-from playwright.async_api import Playwright, async_playwright
+from patchright.async_api import Playwright, async_playwright
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.uploader.tencent_uploader.main_tz import delete_videos_by_conditions
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TENCENT

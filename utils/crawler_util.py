@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 import httpx
 from PIL import Image, ImageDraw, ImageShow
-from playwright.async_api import Cookie, Page
+from patchright.async_api import Cookie, Page
 from social_auto_upload.utils.log import douyin_logger
 
 
