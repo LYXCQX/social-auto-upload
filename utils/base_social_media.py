@@ -68,7 +68,8 @@ async def set_init_script1(context):
         raise
 
 async def set_init_script(context, cookie_name=None):
-    return await set_init_script1(context)
+    return  context
+    # return await set_init_script1(context)
     """设置初始化脚本，包括浏览器指纹伪装和人类行为模拟"""
     # 注入人类行为模拟脚本
     await human_behavior.add_behavior_script(context)
