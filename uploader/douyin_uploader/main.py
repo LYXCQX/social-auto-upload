@@ -8,6 +8,7 @@ from typing import Any
 import loguru
 from dotenv import load_dotenv
 from patchright.async_api import Playwright, async_playwright, Page
+from social_auto_upload.utils.base_up_util import dispatch_upload
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_have_task
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_DOUYIN
@@ -223,7 +224,7 @@ class DouYinVideo(object):
         self.thumbnail_path = thumbnail_path
         self.goods = goods
         self.check_video = check_video
-        self.info = info
+        self.info = info or {}
         self.collection = collection
         self.proxy_setting = proxy_setting
 
@@ -247,21 +248,22 @@ class DouYinVideo(object):
         douyin_logger.info('视频出错了，重新上传中')
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> tuple[bool, Any] | tuple[bool, str]:
-        # 使用 Chromium 浏览器启动一个浏览器实例
-        if self.local_executable_path:
-            browser = await playwright.chromium.launch(
-                headless=False,
-                executable_path=self.local_executable_path,
-                proxy=self.proxy_setting,
-                args=['--start-maximized']  # 添加启动参数以最大化窗口
-            )
-        else:
-            browser = await playwright.chromium.launch(
-                headless=False,
-                proxy=self.proxy_setting,
-                args=['--start-maximized']  # 添加启动参数以最大化窗口
-            )
+    async def upload(self, playwright: Playwright, browser) -> tuple[bool, Any] | tuple[bool, str]:
+        # 使用 Chromium 浏览器或传入的 Camoufox 浏览器实例
+        if playwright:
+            if self.local_executable_path:
+                browser = await playwright.chromium.launch(
+                    headless=False,
+                    executable_path=self.local_executable_path,
+                    proxy=self.proxy_setting,
+                    args=['--start-maximized']
+                )
+            else:
+                browser = await playwright.chromium.launch(
+                    headless=False,
+                    proxy=self.proxy_setting,
+                    args=['--start-maximized']
+                )
         if self.info.get('douyin_publish_type') == '分销':
             fx_account_path = os.path.join(BASE_DIR, 'cookies', 'fx')
             if not os.path.exists(fx_account_path):
@@ -794,8 +796,7 @@ class DouYinVideo(object):
                 await asyncio.sleep(2)
 
     async def main(self):
-        async with async_playwright() as playwright:
-            return await self.upload(playwright)
+        return await dispatch_upload(self)
 
     async def fill_title_and_tags(self, page):
         """填充标题和话题"""

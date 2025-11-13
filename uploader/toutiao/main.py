@@ -6,6 +6,7 @@ from typing import Tuple, Any
 
 import loguru
 from patchright.async_api import Playwright, async_playwright, Page
+from social_auto_upload.utils.base_up_util import dispatch_upload
 import os
 import asyncio
 from dotenv import load_dotenv
@@ -150,7 +151,7 @@ class TouTiaoVideo(object):
         self.thumbnail_path = thumbnail_path
         self.goods = goods
         self.check_video = check_video
-        self.info = info
+        self.info = info or {}
 
     async def set_schedule_time_toutiao(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -172,19 +173,20 @@ class TouTiaoVideo(object):
         toutiao_logger.info('视频出错了，重新上传中')
         await page.locator('span:text-is("继续上传")').click()
 
-    async def upload(self, playwright: Playwright) -> tuple[bool, Any] | tuple[bool, str]:
-        # 使用 Chromium 浏览器启动一个浏览器实例
-        if self.local_executable_path:
-            browser = await playwright.chromium.launch(
-                headless=False,
-                executable_path=self.local_executable_path,
-                args=['--start-maximized']  # 添加启动参数以最大化窗口
-            )
-        else:
-            browser = await playwright.chromium.launch(
-                headless=False,
-                args=['--start-maximized']  # 添加启动参数以最大化窗口
-            )
+    async def upload(self, playwright: Playwright, browser) -> tuple[bool, Any] | tuple[bool, str]:
+        # 使用 Chromium 或传入的 Camoufox 浏览器实例
+        if playwright:
+            if self.local_executable_path:
+                browser = await playwright.chromium.launch(
+                    headless=False,
+                    executable_path=self.local_executable_path,
+                    args=['--start-maximized']
+                )
+            else:
+                browser = await playwright.chromium.launch(
+                    headless=False,
+                    args=['--start-maximized']
+                )
 
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(storage_state=f"{self.account_file}")
@@ -424,5 +426,4 @@ class TouTiaoVideo(object):
         await page.locator('div[role="listbox"] [role="option"]').first.click()
 
     async def main(self):
-        async with async_playwright() as playwright:
-            return await self.upload(playwright)
+        return await dispatch_upload(self)

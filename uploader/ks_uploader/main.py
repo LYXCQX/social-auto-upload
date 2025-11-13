@@ -6,6 +6,7 @@ from typing import Tuple
 
 import loguru
 from patchright.async_api import Playwright, async_playwright, Page
+from social_auto_upload.utils.base_up_util import dispatch_upload
 import os
 import asyncio
 
@@ -106,7 +107,7 @@ async def get_ks_cookie(account_file):
 
 
 class KSVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, goods=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, goods=None, info=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -115,23 +116,25 @@ class KSVideo(object):
         self.account_file = account_file
         self.date_format = '%Y-%m-%d %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
+        self.info = info or {}
 
     async def handle_upload_error(self, page):
         kuaishou_logger.error("视频出错了，重新上传中")
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> tuple[bool, str]:
-        # 使用 Chromium 浏览器启动一个浏览器实例
+    async def upload(self, playwright: Playwright, browser) -> tuple[bool, str]:
+        # 使用 Chromium 浏览器或传入的 Camoufox 浏览器实例
         print(self.local_executable_path)
-        if self.local_executable_path:
-            browser = await playwright.chromium.launch(
-                headless=False,
-                executable_path=self.local_executable_path,
-            )
-        else:
-            browser = await playwright.chromium.launch(
-                headless=False
-            )  # 创建一个浏览器上下文，使用指定的 cookie 文件
+        if playwright:
+            if self.local_executable_path:
+                browser = await playwright.chromium.launch(
+                    headless=False,
+                    executable_path=self.local_executable_path,
+                )
+            else:
+                browser = await playwright.chromium.launch(
+                    headless=False
+                )
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context,os.path.basename(self.account_file))
         context.on("close", lambda: context.storage_state(path=self.account_file))
@@ -249,8 +252,7 @@ class KSVideo(object):
         return True, msg_res
 
     async def main(self):
-        async with async_playwright() as playwright:
-            return await self.upload(playwright)
+        return await dispatch_upload(self)
 
     async def set_schedule_time(self, page, publish_date):
         kuaishou_logger.info("click schedule")

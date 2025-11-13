@@ -25,6 +25,8 @@ from social_auto_upload.uploader.tencent_uploader.main_tz import add_original
 
 from social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji, add_comment
 
+from social_auto_upload.utils.base_up_util import dispatch_upload
+
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config', "{}")).get('tencent', {})
 
@@ -913,21 +915,7 @@ class TencentVideo(object):
 
 
     async def main(self):
-        if self.info.get("camoufox",False):
-            addons_path = self.info.get("addons_path")
-            addons = []
-            if addons_path:
-                addons = [str(item) for item in addons_path.iterdir() if item.is_dir()]
-            fg = FingerprintGenerator(browser='firefox', os=('windows', 'macos'),
-                                      device='desktop',
-                                      )
-
-            with AsyncCamoufox(os=["windows", "macos"], humanize=True, addons=addons, enable_cache=True, geoip=True,
-                               proxy=self.proxy_setting,fingerprint=fg.generate()) as browser:
-                return await self.upload(None,browser)
-        else:
-            async with async_playwright() as playwright:
-                return await self.upload(playwright)
+        return dispatch_upload(self)
 
 # def normalize_post_time(post_time: str) -> str:
 #     """标准化发布时间格式，便于比较"""

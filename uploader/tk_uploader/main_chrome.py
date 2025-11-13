@@ -12,6 +12,7 @@ from social_auto_upload.uploader.tk_uploader.tk_config import Tk_Locator
 from social_auto_upload.utils.base_social_media import set_init_script
 from social_auto_upload.utils.files_times import get_absolute_path
 from social_auto_upload.utils.log import tiktok_logger
+from social_auto_upload.utils.base_up_util import dispatch_upload
 
 
 async def cookie_auth(account_file):
@@ -72,7 +73,7 @@ async def get_tiktok_cookie(account_file):
 
 
 class TiktokVideo(object):
-    def __init__(self, title, file_path, tags, publish_date, account_file, thumbnail_path=None):
+    def __init__(self, title, file_path, tags, publish_date, account_file, thumbnail_path=None,info=None):
         self.title = title
         self.file_path = file_path
         self.tags = tags
@@ -81,6 +82,7 @@ class TiktokVideo(object):
         self.account_file = account_file
         self.local_executable_path = LOCAL_CHROME_PATH
         self.locator_base = None
+        self.info = info
 
     async def set_schedule_time(self, page, publish_date):
         schedule_input_element = self.locator_base.get_by_label('Schedule')
@@ -146,8 +148,9 @@ class TiktokVideo(object):
         file_chooser = await fc_info.value
         await file_chooser.set_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> tuple[bool, str]:
-        browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
+    async def upload(self, playwright: Playwright = None, browser=None) -> tuple[bool, str]:
+        if Playwright:
+            browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
         context = await browser.new_context(storage_state=f"{self.account_file}")
         # context = await set_init_script(context)
         page = await context.new_page()
@@ -306,5 +309,4 @@ class TiktokVideo(object):
             self.locator_base = page.locator(Tk_Locator.default) 
 
     async def main(self):
-        async with async_playwright() as playwright:
-            return await self.upload(playwright)
+        return await dispatch_upload(self)

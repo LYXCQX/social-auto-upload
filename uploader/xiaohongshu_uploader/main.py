@@ -2,6 +2,7 @@
 from datetime import datetime
 
 from patchright.async_api import Playwright, async_playwright, Page
+from social_auto_upload.utils.base_up_util import dispatch_upload
 import os
 import asyncio
 
@@ -64,7 +65,7 @@ async def xiaohongshu_cookie_gen(account_file):
 
 
 class XiaoHongShuVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, info=None):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -73,6 +74,7 @@ class XiaoHongShuVideo(object):
         self.date_format = '%Y年%m月%d日 %H:%M'
         self.local_executable_path = LOCAL_CHROME_PATH
         self.thumbnail_path = thumbnail_path
+        self.info = info or {}
 
     async def set_schedule_time_xiaohongshu(self, page, publish_date):
         print("  [-] 正在设置定时发布时间...")
@@ -105,12 +107,13 @@ class XiaoHongShuVideo(object):
         xiaohongshu_logger.info('视频出错了，重新上传中')
         await page.locator('div.progress-div [class^="upload-btn-input"]').set_input_files(self.file_path)
 
-    async def upload(self, playwright: Playwright) -> None:
-        # 使用 Chromium 浏览器启动一个浏览器实例
-        if self.local_executable_path:
-            browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
-        else:
-            browser = await playwright.chromium.launch(headless=False)
+    async def upload(self, playwright: Playwright, browser) -> None:
+        # 使用 Chromium 浏览器或传入的 Camoufox 浏览器实例
+        if playwright:
+            if self.local_executable_path:
+                browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
+            else:
+                browser = await playwright.chromium.launch(headless=False)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(
             viewport={"width": 1600, "height": 900},
@@ -361,7 +364,6 @@ class XiaoHongShuVideo(object):
             return False
 
     async def main(self):
-        async with async_playwright() as playwright:
-            await self.upload(playwright)
+        await dispatch_upload(self)
 
 
