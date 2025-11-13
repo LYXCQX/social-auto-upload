@@ -1,10 +1,13 @@
+import pickle
 import sqlite3
 import json
 import random
 import os
 from datetime import datetime
-from social_auto_upload.conf import BASE_DIR
 
+from browserforge.fingerprints import FingerprintGenerator
+from social_auto_upload.conf import BASE_DIR
+from social_auto_upload.utils.log import douyin_logger
 
 class FingerprintManager:
     def __init__(self):
@@ -282,12 +285,14 @@ class FingerprintManager:
             conn.close()
             
             print(f"使用现有浏览器指纹: {cookie_name}")
-            return json.loads(row[0])
+            return pickle.loads(row[0])
         else:
             # 生成新指纹
-            fingerprint = self.generate_random_fingerprint()
-            fingerprint_json = json.dumps(fingerprint, ensure_ascii=False)
-            
+            fg = FingerprintGenerator(browser='firefox', os=('windows', 'macos'),
+                                      device='desktop')
+            fingerprint = fg.generate()
+            fingerprint_json = pickle.dumps(fingerprint)
+
             # 保存到数据库
             c.execute('''INSERT INTO fingerprints (cookie_name, fingerprint_data, last_used) 
                         VALUES (?, ?, ?)''',

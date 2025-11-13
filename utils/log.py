@@ -3,8 +3,6 @@ import sys
 import atexit
 from pathlib import Path
 from loguru import logger
-from config import PLATFORM_UPLOAD
-
 from social_auto_upload.conf import BASE_DIR
 
 # 获取程序运行目录
@@ -105,16 +103,8 @@ platform_loggers = {
 }
 
 # 创建所有平台的日志记录器，但只启用当前平台的日志文件
+isPackaged: bool = not sys.argv[0].endswith('.py')
 for platform_name, log_name in platform_loggers.items():
-    if getattr(sys, 'frozen', False):
-        # 如果是打包后的 exe 运行
-        if platform_name == PLATFORM_UPLOAD:
-            # 当前平台创建文件日志
-            globals()[f"{platform_name}_logger"] = create_logger(log_name, f'logs/{platform_name}.log')
-        else:
-            # 其他平台只创建内存日志
-            globals()[f"{platform_name}_logger"] = logger.bind(business_name=log_name)
-    else:
         # 源码运行时创建所有平台的文件日志
         globals()[f"{platform_name}_logger"] = create_logger(log_name, f'logs/{platform_name}.log')
 

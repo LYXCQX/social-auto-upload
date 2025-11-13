@@ -915,7 +915,7 @@ class TencentVideo(object):
 
 
     async def main(self):
-        return dispatch_upload(self)
+        return await dispatch_upload(self)
 
 # def normalize_post_time(post_time: str) -> str:
 #     """标准化发布时间格式，便于比较"""
