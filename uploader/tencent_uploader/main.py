@@ -9,8 +9,6 @@ from datetime import datetime
 import re
 
 import loguru
-from browserforge.fingerprints import FingerprintGenerator
-from camoufox import AsyncCamoufox
 from config import PLATFORM
 from config_manager import ConfigManager
 from patchright.async_api import Playwright, async_playwright

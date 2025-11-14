@@ -275,13 +275,6 @@ class DouYinVideo(object):
         context = await set_init_script(context,os.path.basename(self.account_file))
         # 创建一个新的页面
         page = await context.new_page()
-        # 动态获取屏幕尺寸
-        screen_size = await page.evaluate("""() => ({
-            width: window.screen.availWidth,
-            height: window.screen.availHeight
-        })""")
-
-        await page.set_viewport_size(screen_size)
         if self.info and self.info.get("anchor_info", None) and self.info.get("enable_drama", False):
             anchor_info = self.info.get("anchor_info", None)
             playlet_title = anchor_info.get("title", None)
