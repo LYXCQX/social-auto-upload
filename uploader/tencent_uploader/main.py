@@ -77,8 +77,6 @@ async def cookie_auth_br(account_file, browser, un_close):
     # 访问指定的 URL
     await page.goto("https://channels.weixin.qq.com/platform/post/create")
     try:
-        await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
-        tencent_logger.success("[+] cookie 有效")
         if un_close:
             # 如果不关闭浏览器，则进入循环等待页面关闭
             try:
@@ -94,6 +92,8 @@ async def cookie_auth_br(account_file, browser, un_close):
                 except:
                     pass
         else:
+            await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
+            tencent_logger.success("[+] cookie 有效")
             await context.close()
             await browser.close()
         return True
