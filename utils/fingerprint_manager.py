@@ -283,8 +283,6 @@ class FingerprintManager:
                      (datetime.now().isoformat(), cookie_name))
             conn.commit()
             conn.close()
-            
-            print(f"使用现有浏览器指纹: {cookie_name}")
             return pickle.loads(row[0])
         else:
             # 生成新指纹

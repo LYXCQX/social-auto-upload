@@ -140,7 +140,7 @@ async def toutiao_cookie_gen(account_file):
 
 class TouTiaoVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None,
-                 check_video=False, info=None):
+                 check_video=False, info=None, hide_browser=False):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -152,6 +152,7 @@ class TouTiaoVideo(object):
         self.goods = goods
         self.check_video = check_video
         self.info = info or {}
+        self.hide_browser = hide_browser
 
     async def set_schedule_time_toutiao(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -176,15 +177,17 @@ class TouTiaoVideo(object):
     async def upload(self, playwright: Playwright, browser) -> tuple[bool, Any] | tuple[bool, str]:
         # 使用 Chromium 或传入的 Camoufox 浏览器实例
         if playwright:
+            # 根据 hide_browser 设置确定是否隐藏浏览器
+            headless_mode = self.hide_browser
             if self.local_executable_path:
                 browser = await playwright.chromium.launch(
-                    headless=False,
+                    headless=headless_mode,
                     executable_path=self.local_executable_path,
                     args=['--start-maximized']
                 )
             else:
                 browser = await playwright.chromium.launch(
-                    headless=False,
+                    headless=headless_mode,
                     args=['--start-maximized']
                 )
 

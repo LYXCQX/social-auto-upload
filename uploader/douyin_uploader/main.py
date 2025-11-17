@@ -3,9 +3,11 @@ import asyncio
 import os
 import time
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
 import loguru
+from camoufox import AsyncCamoufox
 from dotenv import load_dotenv
 from patchright.async_api import Playwright, async_playwright, Page
 from social_auto_upload.utils.base_up_util import dispatch_upload
@@ -26,6 +28,8 @@ from social_auto_upload.uploader.douyin_uploader.juliang_util import xt_check_lo
 
 from social_auto_upload.conf import BASE_DIR
 
+from social_auto_upload.utils.camoufox_util import _get_camoufox_config
+
 load_dotenv()
 # 从环境变量中获取检测失败的内容列表
 # failure_messages_json = os.getenv('FAILURE_MESSAGES', '[]')
@@ -39,62 +43,71 @@ import json
 
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config',"{}")).get('douyin',{})
-async def cookie_auth(account_file, local_executable_path=None,un_close=False,proxy_setting=None):
+async def cookie_auth(account_file, local_executable_path=None,un_close=False,proxy_setting=None,camoufox=False,addons_path=None):
     if not local_executable_path or not os.path.exists(local_executable_path):
         douyin_logger.warning(f"浏览器路径无效: {local_executable_path}")
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=False if un_close else True,
-                                                   executable_path=local_executable_path,proxy=proxy_setting)
-        context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context,os.path.basename(account_file))
-        # 创建一个新的页面
-        page = await context.new_page()
-        # 访问指定的 URL
-        await page.goto("https://creator.douyin.com/creator-micro/content/upload")
-        try:
-            await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
-        except:
-            douyin_logger.info("[+] 等待5秒 cookie 失效")
+    hide_browser = False if un_close else True
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=hide_browser,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await cookie_auth_br(account_file, browser, un_close)
+    else:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=hide_browser,
+                                                       executable_path=local_executable_path,proxy=proxy_setting)
+            return await cookie_auth_br(account_file, browser, un_close)
+
+async def cookie_auth_br(account_file, browser, un_close):
+    context = await browser.new_context(storage_state=account_file)
+    context = await set_init_script(context, os.path.basename(account_file))
+    # 创建一个新的页面
+    page = await context.new_page()
+    # 访问指定的 URL
+    await page.goto("https://creator.douyin.com/creator-micro/content/upload")
+    try:
+        await page.wait_for_url("https://creator.douyin.com/creator-micro/content/upload", timeout=5000)
+    except:
+        douyin_logger.info("[+] 等待5秒 cookie 失效")
+        await context.close()
+        await browser.close()
+        return False
+    # 2024.06.17 抖音创作者中心改版
+    if not await check_login(page):
+        douyin_logger.info("[+] 等待10秒 cookie 失效")
+        return False
+    else:
+        douyin_logger.info("[+] cookie 有效")
+        if un_close:
+            # 如果不关闭浏览器，则进入循环等待页面关闭
+            try:
+                # 等待页面关闭
+                await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+            except:
+                # 如果出现异常，可能是用户手动关闭了页面
+                pass
+            finally:
+                try:
+                    if context:
+                        await context.close()
+                    if browser:
+                        await browser.close()
+                except:
+                    pass
+        else:
             await context.close()
             await browser.close()
-            return False
-        # 2024.06.17 抖音创作者中心改版
-        if not await check_login(page):
-            douyin_logger.info("[+] 等待10秒 cookie 失效")
-            return False
-        else:
-            douyin_logger.info("[+] cookie 有效")
-            if un_close:
-                # 如果不关闭浏览器，则进入循环等待页面关闭
-                try:
-                    # 等待页面关闭
-                    await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
-                except:
-                    # 如果出现异常，可能是用户手动关闭了页面
-                    pass
-                finally:
-                    try:
-                        if context:
-                            await context.close()
-                        if browser:
-                            await browser.close()
-                    except:
-                        pass
-            else:
-                await context.close()
-                await browser.close()
-            return True
+        return True
 
 
-async def douyin_setup(account_file, handle=False, local_executable_path=None,proxy_setting=None):
+async def douyin_setup(account_file, handle=False, local_executable_path=None,proxy_setting=None,camoufox=False,addons_path=None):
     cookie_str = None
     response_data = None
-    if not os.path.exists(account_file) or not await cookie_auth(account_file,local_executable_path,proxy_setting=proxy_setting):
+    if not os.path.exists(account_file) or not await cookie_auth(account_file,local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path):
         if not handle:
             # Todo alert message
             return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name, response_data,cookie_str = await douyin_cookie_gen(account_file,local_executable_path,proxy_setting=proxy_setting)
+        user_id, user_name, response_data,cookie_str = await douyin_cookie_gen(account_file,local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
@@ -158,62 +171,72 @@ async def get_user_id(page):
     return user_id
 
 
-async def douyin_cookie_gen(account_file,local_executable_path=None, proxy_setting = None):
-    async with async_playwright() as playwright:
-        # Make sure to run headed.
-        browser = await playwright.chromium.launch(headless=False,
-                                                   executable_path=local_executable_path,proxy=proxy_setting)
-        # Setup context however you like.
-        context = await browser.new_context(storage_state= account_file if os.path.exists(account_file) else None)  # Pass any options
-        context = await set_init_script(context,os.path.basename(account_file))
-        # Pause the page, and start recording manually.
-        page = await context.new_page()
-        await page.goto("https://creator.douyin.com/")
-        try:
-            # 设置页面标题为 local_executable_path 的文件名
-            if account_file:
-                file_name = os.path.basename(account_file)
-                await page.evaluate(f'document.title = "{file_name}"')
-        except:
-            pass
-        login_url = page.url
-        # await page.pause()
-        start_time = time.time()
-        while True:
-            if login_url == page.url:
-                await asyncio.sleep(0.5)
-            else:
-                break
-            elapsed_time = time.time() - start_time
-            # 检查是否超过了超时时间
-            if elapsed_time > 1200:
-                raise TimeoutError("操作超时，跳出循环")
-        user_id = await get_user_id(page)
-        user_name = await page.locator('[class^="header-"] [class^="name-"]').text_content()
-        loguru.logger.info(f'{user_id}---{user_name}')
-        # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_DOUYIN, user_name))
-        cookie_str, cookie_dict = convert_cookies(await context.cookies())
-        response_data = None
+async def douyin_cookie_gen(account_file,local_executable_path=None, proxy_setting = None,camoufox=False,addons_path=None):
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=False,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await douyin_cookie_gen_br(account_file, browser)
+    else:
+        async with async_playwright() as playwright:
+            # Make sure to run headed.
+            browser = await playwright.chromium.launch(headless=False,
+                                                       executable_path=local_executable_path,proxy=proxy_setting)
+            return await douyin_cookie_gen_br(account_file, browser)
 
-        async def handle_route(route):
-            nonlocal response_data
-            url = route.request.url
-            if "web/general/search/single" in url:  # 更精确的URL匹配
-                # 获取请求头中的cookie
-                headers = route.request.headers
-                response_data = headers.get('cookie', '')
-                loguru.logger.info(f"获取到cookie: {response_data}")  # 添加日志
-            await route.continue_()
-        await context.close()
-        await browser.close()
-        return user_id, user_name, response_data,cookie_str
 
+async def douyin_cookie_gen_br(account_file, browser):
+    # Setup context however you like.
+    context = await browser.new_context(
+        storage_state=account_file if os.path.exists(account_file) else None)  # Pass any options
+    context = await set_init_script(context, os.path.basename(account_file))
+    # Pause the page, and start recording manually.
+    page = await context.new_page()
+    await page.goto("https://creator.douyin.com/")
+    try:
+        # 设置页面标题为 local_executable_path 的文件名
+        if account_file:
+            file_name = os.path.basename(account_file)
+            await page.evaluate(f'document.title = "{file_name}"')
+    except:
+        pass
+    login_url = page.url
+    # await page.pause()
+    start_time = time.time()
+    while True:
+        if login_url == page.url:
+            await asyncio.sleep(0.5)
+        else:
+            break
+        elapsed_time = time.time() - start_time
+        # 检查是否超过了超时时间
+        if elapsed_time > 1200:
+            raise TimeoutError("操作超时，跳出循环")
+    user_id = await get_user_id(page)
+    user_name = await page.locator('[class^="header-"] [class^="name-"]').text_content()
+    loguru.logger.info(f'{user_id}---{user_name}')
+    # 点击调试器的继续，保存cookie
+    await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_DOUYIN, user_name))
+    cookie_str, cookie_dict = convert_cookies(await context.cookies())
+    response_data = None
+
+    async def handle_route(route):
+        nonlocal response_data
+        url = route.request.url
+        if "web/general/search/single" in url:  # 更精确的URL匹配
+            # 获取请求头中的cookie
+            headers = route.request.headers
+            response_data = headers.get('cookie', '')
+            loguru.logger.info(f"获取到cookie: {response_data}")  # 添加日志
+        await route.continue_()
+
+    await context.close()
+    await browser.close()
+    return user_id, user_name, response_data,cookie_str
 
 
 class DouYinVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, goods=None,
-                 check_video=False, info=None, collection=None,local_executable_path =None,proxy_setting=None):
+                 check_video=False, info=None, collection=None,local_executable_path =None,proxy_setting=None, hide_browser=False):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -227,6 +250,7 @@ class DouYinVideo(object):
         self.info = info or {}
         self.collection = collection
         self.proxy_setting = proxy_setting
+        self.hide_browser = hide_browser
 
     async def set_schedule_time_douyin(self, page, publish_date):
         # 选择包含特定文本内容的 label 元素
@@ -253,14 +277,14 @@ class DouYinVideo(object):
         if playwright:
             if self.local_executable_path:
                 browser = await playwright.chromium.launch(
-                    headless=False,
+                    headless=self.hide_browser,
                     executable_path=self.local_executable_path,
                     proxy=self.proxy_setting,
                     args=['--start-maximized']
                 )
             else:
                 browser = await playwright.chromium.launch(
-                    headless=False,
+                    headless=self.hide_browser,
                     proxy=self.proxy_setting,
                     args=['--start-maximized']
                 )

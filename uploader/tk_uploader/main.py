@@ -70,13 +70,14 @@ async def get_tiktok_cookie(account_file):
 
 
 class TiktokVideo(object):
-    def __init__(self, title, file_path, tags, publish_date, account_file):
+    def __init__(self, title, file_path, tags, publish_date, account_file, hide_browser=False):
         self.title = title
         self.file_path = file_path
         self.tags = tags
         self.publish_date = publish_date
         self.account_file = account_file
         self.locator_base = None
+        self.hide_browser = hide_browser
 
 
     async def set_schedule_time(self, page, publish_date):
@@ -141,7 +142,9 @@ class TiktokVideo(object):
         await file_chooser.set_files(self.file_path)
 
     async def upload(self, playwright: Playwright) -> None:
-        browser = await playwright.firefox.launch(headless=False)
+        # 根据 hide_browser 设置确定是否隐藏浏览器
+        headless_mode = self.hide_browser
+        browser = await playwright.firefox.launch(headless=headless_mode)
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context,os.path.basename(self.account_file))
         page = await context.new_page()

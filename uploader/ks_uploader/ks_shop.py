@@ -126,7 +126,7 @@ async def get_ks_shop_cookie():
 
 
 class KSVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, goods=None, proxy_setting=None, info=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, goods=None, proxy_setting=None, info=None, hide_browser=False):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -137,6 +137,7 @@ class KSVideo(object):
         self.local_executable_path = LOCAL_CHROME_PATH
         self.proxy_setting = proxy_setting
         self.info = info or {}
+        self.hide_browser = hide_browser
 
     async def handle_upload_error(self, page):
         kuaishou_logger.error("视频出错了，重新上传中")
@@ -145,16 +146,18 @@ class KSVideo(object):
     async def upload(self, playwright: Playwright, browser) -> tuple[bool, str]:
         # 使用 Chromium 浏览器或传入的 Camoufox 浏览器实例
         if playwright:
+            # 根据 hide_browser 设置确定是否隐藏浏览器
+            headless_mode = self.hide_browser
             if self.local_executable_path:
                 browser = await playwright.chromium.launch(
-                    headless=False,
+                    headless=headless_mode,
                     proxy=self.proxy_setting,
                     executable_path=self.local_executable_path,
                 )
             else:
                 browser = await playwright.chromium.launch(
                     proxy=self.proxy_setting,
-                    headless=False
+                    headless=headless_mode
                 )
         context = await browser.new_context(storage_state=f"{self.account_file}")
         context = await set_init_script(context,os.path.basename(self.account_file))

@@ -7,8 +7,10 @@ import time
 import uuid
 from datetime import datetime
 import re
+from types import SimpleNamespace
 
 import loguru
+from camoufox import AsyncCamoufox
 from config import PLATFORM
 from config_manager import ConfigManager
 from patchright.async_api import Playwright, async_playwright
@@ -24,6 +26,8 @@ from social_auto_upload.uploader.tencent_uploader.main_tz import add_original
 from social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji, add_comment
 
 from social_auto_upload.utils.base_up_util import dispatch_upload
+
+from social_auto_upload.utils.camoufox_util import _get_camoufox_config
 
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config', "{}")).get('tencent', {})
@@ -49,88 +53,109 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
-async def cookie_auth(account_file, local_executable_path=None, un_close=False,proxy_setting=None):
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=False if un_close else True,
-                                                   executable_path=local_executable_path,proxy=proxy_setting)
-        context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context,os.path.basename(account_file))
-        # 创建一个新的页面
-        page = await context.new_page()
-        # 访问指定的 URL
-        await page.goto("https://channels.weixin.qq.com/platform/post/create")
-        try:
-            await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
-            tencent_logger.success("[+] cookie 有效")
-            if un_close:
-                # 如果不关闭浏览器，则进入循环等待页面关闭
+async def cookie_auth(account_file, local_executable_path=None, un_close=False,proxy_setting=None,camoufox=False,addons_path=None):
+    print(local_executable_path)
+    print(account_file)
+    print(camoufox)
+    hide_browser = False if un_close else True
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=hide_browser,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await cookie_auth_br(account_file, browser, un_close)
+    else:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=hide_browser,
+                                                       executable_path=local_executable_path,proxy=proxy_setting)
+            return await cookie_auth_br(account_file, browser, un_close)
+
+
+async def cookie_auth_br(account_file, browser, un_close):
+    context = await browser.new_context(storage_state=account_file)
+    context = await set_init_script(context, os.path.basename(account_file))
+    # 创建一个新的页面
+    page = await context.new_page()
+    # 访问指定的 URL
+    await page.goto("https://channels.weixin.qq.com/platform/post/create")
+    try:
+        await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
+        tencent_logger.success("[+] cookie 有效")
+        if un_close:
+            # 如果不关闭浏览器，则进入循环等待页面关闭
+            try:
+                # 等待页面关闭
+                await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+            except:
+                # 如果出现异常，可能是用户手动关闭了页面
+                pass
+            finally:
                 try:
-                    # 等待页面关闭
-                    await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+                    await context.close()
+                    await browser.close()
                 except:
-                    # 如果出现异常，可能是用户手动关闭了页面
                     pass
-                finally:
-                    try:
-                        await context.close()
-                        await browser.close()
-                    except:
-                        pass
-            else:
-                await context.close()
-                await browser.close()
-            return True
-        except:
-            tencent_logger.error("[+] 等待5秒 cookie 失效")
-            return False
+        else:
+            await context.close()
+            await browser.close()
+        return True
+    except:
+        tencent_logger.error("[+] 等待5秒 cookie 失效")
+        return False
 
 
-async def get_tencent_cookie(account_file, local_executable_path=None,proxy_setting=None):
-    async with async_playwright() as playwright:
-        options = {
-            'args': [
-                '--lang en-GB'
-            ],
-            'headless': False,  # Set headless option here
-            'executable_path': local_executable_path,
-            'proxy':proxy_setting
-        }
-        # Make sure to run headed.
-        browser = await playwright.chromium.launch(**options)
-        # Setup context however you like.
-        context = await browser.new_context()  # Pass any options
-        # Pause the page, and start recording manually.
-        context = await set_init_script(context,os.path.basename(account_file))
-        page = await context.new_page()
-        await page.goto("https://channels.weixin.qq.com")
-        try:
-            # 设置页面标题为 local_executable_path 的文件名
-            if account_file:
-                file_name = os.path.basename(account_file)
-                await page.evaluate(f'document.title = "{file_name}"')
-        except:
-            pass
+async def get_tencent_cookie(account_file, local_executable_path=None,proxy_setting=None,camoufox=False,addons_path=None):
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=False,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await get_tencent_cookie_br(account_file, browser)
+    else:
+        async with async_playwright() as playwright:
+            options = {
+                'args': [
+                    '--lang en-GB'
+                ],
+                'headless': False,  # Set headless option here
+                'executable_path': local_executable_path,
+                'proxy':proxy_setting
+            }
+            # Make sure to run headed.
+            browser = await playwright.chromium.launch(**options)
+            return await get_tencent_cookie_br(account_file, browser)
 
-        # await page.pause()
-        # # 点击调试器的继续，保存cookie
-        # await context.storage_state(path=account_file)
-        login_url = page.url
-        start_time = time.time()
-        while True:
-            if login_url == page.url:
-                await asyncio.sleep(0.5)
-            else:
-                break
-            elapsed_time = time.time() - start_time
-            # 检查是否超过了超时时间
-            if elapsed_time > 120:
-                raise TimeoutError("操作超时，跳出循环")
-        user_id = await get_user_id(page)
-        user_name = await page.locator('.finder-nickname').text_content()
-        loguru.logger.info(f'{user_id}---{user_name}')
-        # 点击调试器的继续，保存cookie
-        await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
-        return user_id, user_name
+
+async def get_tencent_cookie_br(account_file, browser):
+    # Setup context however you like.
+    context = await browser.new_context()  # Pass any options
+    # Pause the page, and start recording manually.
+    context = await set_init_script(context, os.path.basename(account_file))
+    page = await context.new_page()
+    await page.goto("https://channels.weixin.qq.com")
+    try:
+        # 设置页面标题为 local_executable_path 的文件名
+        if account_file:
+            file_name = os.path.basename(account_file)
+            await page.evaluate(f'document.title = "{file_name}"')
+    except:
+        pass
+    # await page.pause()
+    # # 点击调试器的继续，保存cookie
+    # await context.storage_state(path=account_file)
+    login_url = page.url
+    start_time = time.time()
+    while True:
+        if login_url == page.url:
+            await asyncio.sleep(0.5)
+        else:
+            break
+        elapsed_time = time.time() - start_time
+        # 检查是否超过了超时时间
+        if elapsed_time > 120:
+            raise TimeoutError("操作超时，跳出循环")
+    user_id = await get_user_id(page)
+    user_name = await page.locator('.finder-nickname').text_content()
+    loguru.logger.info(f'{user_id}---{user_name}')
+    # 点击调试器的继续，保存cookie
+    await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
+    return user_id, user_name
 
 
 async def get_user_id(page):
@@ -159,15 +184,15 @@ async def get_user_id(page):
     return user_id
 
 
-async def weixin_setup(account_file, handle=False, local_executable_path=None,proxy_setting=None):
+async def weixin_setup(account_file, handle=False, local_executable_path=None,proxy_setting=None,camoufox=False,addons_path=None):
     # account_file = get_absolute_path(account_file, "tencent_uploader")
     if not os.path.exists(account_file) or not await cookie_auth(account_file,
-                                                                 local_executable_path=local_executable_path,proxy_setting=proxy_setting):
+                                                                 local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path):
         if not handle:
             # Todo alert message
             return False, None, None
         tencent_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name = await get_tencent_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting)
+        user_id, user_name = await get_tencent_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
@@ -177,7 +202,7 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None,pr
 
 class TencentVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None,
-                 local_executable_path=None, info=None, collection=None, declare_original=None, proxy_setting=None):
+                 local_executable_path=None, info=None, collection=None, declare_original=None, proxy_setting=None, hide_browser=False):
         self.title = title[:999]  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -189,6 +214,7 @@ class TencentVideo(object):
         self.collection = collection
         self.declare_original = declare_original
         self.proxy_setting = proxy_setting
+        self.hide_browser = hide_browser
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -330,7 +356,7 @@ class TencentVideo(object):
         if playwright:
             # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
             browser = await playwright.chromium.launch(
-                headless=False,
+                headless=self.hide_browser,
                 executable_path=self.local_executable_path,
                 proxy=self.proxy_setting)
         # 创建一个浏览器上下文，使用指定的 cookie 文件

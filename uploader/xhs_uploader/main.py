@@ -66,7 +66,7 @@ config.read(Path(BASE_DIR / "uploader" / "xhs_uploader" / "accounts.ini"))
 
 
 class XHSVideo(object):
-    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None):
+    def __init__(self, title, file_path, tags, publish_date: datetime, account_file, thumbnail_path=None, hide_browser=False):
         self.title = title  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -74,6 +74,7 @@ class XHSVideo(object):
         self.account_file = account_file
         self.thumbnail_path = thumbnail_path
         self.local_executable_path = LOCAL_CHROME_PATH
+        self.hide_browser = hide_browser
 
     async def upload(self) -> tuple[bool, str]:
         msg_res = '检测通过，暂未发现异常'
