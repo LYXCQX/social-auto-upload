@@ -3,8 +3,10 @@ import asyncio
 import json
 import os
 import time
+from types import SimpleNamespace
 from urllib.parse import unquote_plus
 
+from camoufox import AsyncCamoufox
 from config import PLATFORM
 from config_manager import ConfigManager
 from dotenv import load_dotenv
@@ -15,53 +17,65 @@ from social_auto_upload.utils.log import douyin_logger
 from social_auto_upload.utils.bus_exception import UpdateError
 from task_crawler import TaskCrawler, PlatformType, TaskType
 
+from src.publish.social_auto_upload.utils.camoufox_util import _get_camoufox_config
+
 load_dotenv()
 
 
 config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config',"{}")).get('douyin',{})
-async def cookie_auth(account_file, local_executable_path=None,proxy_setting=None):
+async def cookie_auth(account_file, local_executable_path=None,proxy_setting=None,camoufox=False,addons_path=None):
     if not local_executable_path or not os.path.exists(local_executable_path):
         douyin_logger.warning(f"浏览器路径无效: {local_executable_path}")
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=True,
-                                                   executable_path=local_executable_path,proxy=proxy_setting)
-        context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context,os.path.basename(account_file))
-        # 创建一个新的页面
-        page = await context.new_page()
-        # 访问指定的 URL
-        await page.goto("https://www.xingtu.cn/sup/creator/user/overview")
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=True,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await cookie_auth_br(account_file, browser)
+    else:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True,
+                                                       executable_path=local_executable_path, proxy=proxy_setting)
+            return await cookie_auth_br(account_file, browser)
+
+
+async def cookie_auth_br(account_file, browser):
+
+    context = await browser.new_context(storage_state=account_file)
+    context = await set_init_script(context, os.path.basename(account_file))
+    # 创建一个新的页面
+    page = await context.new_page()
+    # 访问指定的 URL
+    await page.goto("https://www.xingtu.cn/sup/creator/user/overview")
+    try:
+        await page.wait_for_url(
+            "https://www.xingtu.cn/sup/creator/user/overview", timeout=5000)
+    except:
+        douyin_logger.info("[+] 等待5秒 cookie 失效")
         try:
-            await page.wait_for_url(
-                "https://www.xingtu.cn/sup/creator/user/overview", timeout=5000)
-        except:
-            douyin_logger.info("[+] 等待5秒 cookie 失效")
-            try:
-                if context:
-                    await context.close()
-                if browser:
-                    await browser.close()
-            except Exception as e:
-                douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
-            return False
-        await asyncio.sleep(2)
-        # 2024.06.17 抖音创作者中心改版
-        if await page.get_by_text('星图资讯').count():
-            douyin_logger.info("[+] 等待5秒 cookie 失效")
-            return False
-        else:
-            douyin_logger.info("[+] cookie 有效")
-            return True
+            if context:
+                await context.close()
+            if browser:
+                await browser.close()
+        except Exception as e:
+            douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
+        return False
+    await asyncio.sleep(2)
+    # 2024.06.17 抖音创作者中心改版
+    if await page.get_by_text('星图资讯').count():
+        douyin_logger.info("[+] 等待5秒 cookie 失效")
+        return False
+    else:
+        douyin_logger.info("[+] cookie 有效")
+        return True
 
 
-async def juliang_setup(account_file, handle=False, local_executable_path=None, proxy_setting=None):
-    if (account_file and not os.path.exists(account_file)) or not await cookie_auth(account_file, local_executable_path,proxy_setting):
+async def juliang_setup(account_file, handle=False, local_executable_path=None, proxy_setting=None,camoufox=False,addons_path=None):
+    if (account_file and not os.path.exists(account_file)) or not await cookie_auth(account_file, local_executable_path,proxy_setting,camoufox=camoufox,addons_path=addons_path):
         if not handle:
             # Todo alert message
             return False, None, None, None
         douyin_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name, douyin_id = await juliang_cookie_gen(account_file, local_executable_path,proxy_setting)
+        user_id, user_name, douyin_id = await juliang_cookie_gen(account_file, local_executable_path,proxy_setting,camoufox=camoufox,addons_path=addons_path)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
@@ -111,46 +125,56 @@ async def get_user_id(page):
     return user_id, douyin_id
 
 
-async def juliang_cookie_gen(account_file, local_executable_path=None, proxy_setting=None):
-    async with async_playwright() as playwright:
-        # Make sure to run headed.
-        browser = await playwright.chromium.launch(headless=False,
-                                                   executable_path=local_executable_path,proxy=proxy_setting)
-        # Setup context however you like.
-        context = await browser.new_context(storage_state=account_file)
-        context = await set_init_script(context,os.path.basename(account_file))
-        # Pause the page, and start recording manually.
-        page = await context.new_page()
-        await page.goto("https://www.xingtu.cn/?redirect_uri=https://www.xingtu.cn/sup/creator/user/overview")
-        start_time = time.time()
-        while True:
-            if page.url.startswith('https://www.xingtu.cn/sup/creator/user/overview'):
-                break
-            else:
-                await asyncio.sleep(0.5)
-            elapsed_time = time.time() - start_time
-            # 检查是否超过了超时时间
-            if elapsed_time > 240:
-                raise TimeoutError("操作超时，跳出循环")
-        user_id, douyin_id = await get_user_id(page)
-        # 修复：添加await关键字获取text_content()的结果
-        name_element = page.locator('[class="basic-info"] [class="name"]')
-        user_name = await name_element.text_content()
-        user_name = user_name.strip()
-        douyin_logger.info(f"获取到用户名: {user_name}")
-        
-        douyin_logger.info(f'{user_id}---{douyin_id}---{user_name}')
-        douyin_logger.info(f'---------{account_file}')
-        # 点击调试器的继续，保存cookie
-        await context.storage_state(path=account_file)
-        try:
-            if context:
-                await context.close()
-            if browser:
-                await browser.close()
-        except Exception as e:
-            douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
-        return user_id, user_name, douyin_id
+async def juliang_cookie_gen(account_file, local_executable_path=None, proxy_setting=None,camoufox=False,addons_path=None):
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=False,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await juliang_cookie_gen_br(account_file, browser)
+    else:
+        async with async_playwright() as playwright:
+            # Make sure to run headed.
+            browser = await playwright.chromium.launch(headless=False,
+                                                       executable_path=local_executable_path,proxy=proxy_setting)
+            return await juliang_cookie_gen_br(account_file, browser)
+
+
+async def juliang_cookie_gen_br(account_file, browser):
+    # Setup context however you like.
+    context = await browser.new_context(storage_state=account_file)
+    context = await set_init_script(context, os.path.basename(account_file))
+    # Pause the page, and start recording manually.
+    page = await context.new_page()
+    await page.goto("https://www.xingtu.cn/?redirect_uri=https://www.xingtu.cn/sup/creator/user/overview")
+    start_time = time.time()
+    while True:
+        if page.url.startswith('https://www.xingtu.cn/sup/creator/user/overview'):
+            break
+        else:
+            await asyncio.sleep(0.5)
+        elapsed_time = time.time() - start_time
+        # 检查是否超过了超时时间
+        if elapsed_time > 240:
+            raise TimeoutError("操作超时，跳出循环")
+    user_id, douyin_id = await get_user_id(page)
+    # 修复：添加await关键字获取text_content()的结果
+    name_element = page.locator('[class="basic-info"] [class="name"]')
+    user_name = await name_element.text_content()
+    user_name = user_name.strip()
+    douyin_logger.info(f"获取到用户名: {user_name}")
+    douyin_logger.info(f'{user_id}---{douyin_id}---{user_name}')
+    douyin_logger.info(f'---------{account_file}')
+    # 点击调试器的继续，保存cookie
+    await context.storage_state(path=account_file)
+    try:
+        if context:
+            await context.close()
+        if browser:
+            await browser.close()
+    except Exception as e:
+        douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
+    # return user_id, user_name, douyin_id
+
+
 async def xt_have_task(page, playlet_title,pub_config):
     await page.goto("https://www.xingtu.cn/sup/creator/user/task")
     await page.wait_for_url("https://www.xingtu.cn/sup/creator/user/task*")

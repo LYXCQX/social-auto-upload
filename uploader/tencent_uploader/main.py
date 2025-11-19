@@ -54,9 +54,6 @@ def format_str_for_short_title(origin_title: str) -> str:
 
 
 async def cookie_auth(account_file, local_executable_path=None, un_close=False,proxy_setting=None,camoufox=False,addons_path=None):
-    print(local_executable_path)
-    print(account_file)
-    print(camoufox)
     hide_browser = False if un_close else True
     if camoufox:
         camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=hide_browser,proxy_setting=proxy_setting))
