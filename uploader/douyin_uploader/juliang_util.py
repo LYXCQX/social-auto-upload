@@ -17,7 +17,7 @@ from social_auto_upload.utils.log import douyin_logger
 from social_auto_upload.utils.bus_exception import UpdateError
 from task_crawler import TaskCrawler, PlatformType, TaskType
 
-from src.publish.social_auto_upload.utils.camoufox_util import _get_camoufox_config
+from social_auto_upload.utils.camoufox_util import _get_camoufox_config
 
 load_dotenv()
 
