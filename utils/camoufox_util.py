@@ -11,7 +11,7 @@ async def _get_camoufox_config(par_):
         addons = [str(item) for item in addons_path.iterdir() if item.is_dir()]
     fingerprint = fingerprint_manager.get_or_create_fingerprint(os.path.basename(par_.account_file))
     return {
-        # 'humanize': 0.75,
+        'humanize': 0.75,
         'addons': addons,
         'enable_cache': True,
         'geoip': True,
