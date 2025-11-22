@@ -1,5 +1,6 @@
 import sys
 import atexit
+import os
 from pathlib import Path
 from loguru import logger
 from social_auto_upload.conf import BASE_DIR
@@ -16,6 +17,24 @@ from social_auto_upload.conf import BASE_DIR
 # 创建日志目录
 log_dir = BASE_DIR / 'logs'
 log_dir.mkdir(parents=True, exist_ok=True)
+
+def safe_rotation_function(message, file):
+    """
+    Custom rotation function that handles Windows file locking gracefully.
+    Returns True if rotation should occur, False otherwise.
+    
+    Args:
+        message: The log message being written
+        file: The file object being written to
+    """
+    try:
+        file_size = os.path.getsize(file.name)
+        # Rotate when file exceeds 10 MB
+        return file_size > 10 * 1024 * 1024
+    except (OSError, FileNotFoundError, AttributeError):
+        # If we can't access the file, don't rotate
+        return False
+
 
 def log_formatter(record: dict) -> str:
     """
@@ -55,9 +74,15 @@ def create_logger(log_name: str, file_path: str):
 
     log_file = BASE_DIR / file_path
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    logger.add(str(log_file), filter=filter_record, level="INFO",
-              rotation="10 MB", retention="3 days",  # 保留3天的日志，自动清理3天前的日志
-              backtrace=True, diagnose=True)
+    try:
+        logger.add(str(log_file), filter=filter_record, level="INFO",
+                  rotation=safe_rotation_function, retention="3 days",  # 保留3天的日志，自动清理3天前的日志
+                  backtrace=True, diagnose=True, delay=True)
+    except Exception as e:
+        # Fallback: add logger without rotation if custom rotation fails
+        logger.add(str(log_file), filter=filter_record, level="INFO",
+                  retention="3 days",
+                  backtrace=True, diagnose=True, delay=True)
     return logger.bind(business_name=log_name)
 
 
@@ -77,16 +102,30 @@ except:
     pass
 
 # 添加文件日志
-logger.add(
-    log_dir / "app_{time:YYYY-MM-DD}.log",
-    rotation="20 MB",
-    retention="3 days",  # 保留3天的日志，自动清理3天前的日志
-    encoding="utf-8",
-    format=log_formatter,
-    level="INFO",
-    backtrace=True,
-    diagnose=True
-)
+try:
+    logger.add(
+        log_dir / "app_{time:YYYY-MM-DD}.log",
+        rotation=safe_rotation_function,
+        retention="3 days",  # 保留3天的日志，自动清理3天前的日志
+        encoding="utf-8",
+        format=log_formatter,
+        level="INFO",
+        backtrace=True,
+        diagnose=True,
+        delay=True
+    )
+except Exception as e:
+    # Fallback: add logger without rotation if custom rotation fails
+    logger.add(
+        log_dir / "app_{time:YYYY-MM-DD}.log",
+        retention="3 days",
+        encoding="utf-8",
+        format=log_formatter,
+        level="INFO",
+        backtrace=True,
+        diagnose=True,
+        delay=True
+    )
 
 # 定义所有平台的日志记录器
 platform_loggers = {
