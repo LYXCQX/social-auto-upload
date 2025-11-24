@@ -43,7 +43,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
     tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 标题为{video_title} 且 页码为{page_index}")
     try:
         start_time = time.time()
-        timeout = 3000  # 5分钟超时
+        timeout = 864000  # 5分钟超时
         page_reload = True
         current_page = 0
         while True:

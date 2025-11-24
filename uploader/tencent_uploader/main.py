@@ -90,12 +90,12 @@ async def cookie_auth_br(account_file, browser, un_close):
                     pass
         else:
             await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
-            tencent_logger.success("[+] cookie 有效")
+            tencent_logger.success("  [视频号上传] cookie 有效")
             await context.close()
             await browser.close()
         return True
     except:
-        tencent_logger.error("[+] 等待5秒 cookie 失效")
+        tencent_logger.error(" [视频号上传]等待5秒 cookie 失效")
         return False
 
 
@@ -188,7 +188,7 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None,pr
         if not handle:
             # Todo alert message
             return False, None, None
-        tencent_logger.info('[+] cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
+        tencent_logger.info(f'[视频号登录] {account_file} cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
         user_id, user_name = await get_tencent_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
@@ -212,6 +212,8 @@ class TencentVideo(object):
         self.declare_original = declare_original
         self.proxy_setting = proxy_setting
         self.hide_browser = hide_browser
+        self.upload_retry_attempts = 0
+        self.max_upload_retries = 3
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -249,7 +251,14 @@ class TencentVideo(object):
         await page.locator("div.input-editor").click()
 
     async def handle_upload_error(self, page):
-        tencent_logger.info("视频出错了，重新上传中")
+        if self.upload_retry_attempts >= self.max_upload_retries:
+            msg = f"  [视频号上传] {self.file_path} 上传失败，已达到最大重试次数 {self.max_upload_retries} 次"
+            tencent_logger.error(msg)
+            raise UpdateError(msg)
+
+        self.upload_retry_attempts += 1
+        tencent_logger.info(
+            f"  [视频号上传] {self.file_path} 视频出错了，重新上传中（第 {self.upload_retry_attempts}/{self.max_upload_retries} 次）")
         await page.locator('div.media-status-content div.tag-inner:has-text("删除")').click()
         await page.get_by_role('button', name="删除", exact=True).click()
         file_input = page.locator(pub_config.get('up_file'))
@@ -279,7 +288,7 @@ class TencentVideo(object):
 
         match_drama_name = anchor_info.get("match_drama_name", None)
         playlet_title_tag = anchor_info.get("playlet_title_tag", None)
-        tencent_logger.info(f"开始添加活动: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
+        tencent_logger.info(f"  [视频号上传] {self.file_path} 开始添加活动: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
         active_hd = pub_config.get('active_hd')
         # 等待包含"活动"标签的form-item出现
         await page.wait_for_selector(active_hd, state="visible", timeout=5000)
@@ -289,7 +298,7 @@ class TencentVideo(object):
         no_activity_span = form_item.locator("span:has-text('不参与活动'):visible")
         if await no_activity_span.is_visible():
             await no_activity_span.click()
-            tencent_logger.info("已点击不参与活动")
+            tencent_logger.info(f"  [视频号上传] {self.file_path} 已点击不参与活动")
 
         # 等待活动列表加载
         await page.wait_for_selector(f"{active_hd} .common-option-list-wrap", state="visible", timeout=5000)
@@ -315,7 +324,7 @@ class TencentVideo(object):
                 continue
             creator_name = await element.locator('.creator-name').text_content()
             # 去除当前活动标题中的标点符号
-            tencent_logger.info(f'已找到活动：{name}--需要匹配活动：{match_title}')
+            tencent_logger.info(f'  [视频号上传] {self.file_path} 已找到活动：{name}--需要匹配活动：{match_title}')
 
             # 提取书名号中的内容和推广前的内容
             book_title = re.search(r'《(.*?)》', name)
@@ -324,7 +333,7 @@ class TencentVideo(object):
             if book_title:
                 book_content = book_title.group(1)
                 promotion_content = promotion_title.group(1).strip()
-                tencent_logger.info(f'提取的活动名称：书名号内容={book_content}, 推广前内容={promotion_content}')
+                tencent_logger.info(f'  [视频号上传] {self.file_path} 提取的活动名称：书名号内容={book_content}, 推广前内容={promotion_content}')
 
                 if match_drama_name:
                     have_platlet = match_title.strip() == book_content.strip()
@@ -337,13 +346,13 @@ class TencentVideo(object):
                     if playlet_title_tag not in creator_name:
                         continue
                 await element.click()
-                tencent_logger.info(f"成功添加活动: {match_title}")
+                tencent_logger.info(f"  [视频号上传] {self.file_path} 成功添加活动: {match_title}")
                 found = True
                 break
 
         if not found:
             if type == 1:
-                raise UpdateError(f"没有找到 {playlet_title_tag}：剧场的短剧任务：{match_title}")
+                raise UpdateError(f"  [视频号上传] {self.file_path} 没有找到 {playlet_title_tag}：剧场的短剧任务：{match_title}")
             else:
                 random_element = random.choice(activity_elements)
                 if random_element:
@@ -374,12 +383,12 @@ class TencentVideo(object):
         upload_count = 1
         if self.info and "video_upload_count" in self.info:
             upload_count = max(1, int(self.info.get("video_upload_count", 1)))  # 确保至少上传1次
-            tencent_logger.info(f'[+]计划上传 {upload_count} 次 -------{self.title}.mp4')
+            tencent_logger.info(f'  [视频号上传] {self.file_path} 计划上传 {upload_count} 次 -------{self.title}.mp4')
         for i in range(upload_count):
-            tencent_logger.info(f'[+]正在进行第 {i + 1}/{upload_count} 次上传 -------{self.title}.mp4')
+            tencent_logger.info(f'  [视频号上传] {self.file_path} 正在进行第 {i + 1}/{upload_count} 次上传 -------{self.title}.mp4')
             # 访问指定的 URL
             await page.goto("https://channels.weixin.qq.com/platform/post/create")
-            tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
+            tencent_logger.info(f' [视频号上传] {self.file_path} 正在上传-------{self.title}.mp4')
             # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
             await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
             # await page.wait_for_selector('input[type="file"]', timeout=10000)
@@ -405,11 +414,11 @@ class TencentVideo(object):
                     else:
                         await add_short_play_by_juji(self,page,pub_config)
             else:
-                tencent_logger.info('未选择挂短剧')
+                tencent_logger.info(f'  [视频号上传] {self.file_path} 未选择挂短剧')
             try:
                 await add_original(self, page)
             except:
-                tencent_logger.exception('添加原创失败，不影响执行')
+                tencent_logger.exception(f'  [视频号上传] {self.file_path} 添加原创失败，不影响执行')
             should_delete = self.info and self.info.get("delete_platform_video", False) and (i < upload_count - 1)
             if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
@@ -466,19 +475,19 @@ class TencentVideo(object):
                     await asyncio.sleep(0.5)
                     await page.click(':text-is("不显示位置")')
                     success = True
-                    tencent_logger.info('成功关闭位置显示')
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 成功关闭位置显示')
                     break
                 except:
                     await asyncio.sleep(0.5)
                     continue
             if not success:
-                tencent_logger.warning('关闭位置显示失败，继续执行')
+                tencent_logger.warning(f'  [视频号上传] {self.file_path} 关闭位置显示失败，继续执行')
 
     async def delete_video(self, page):
         # 检查是否需要删除视频
         if self.info and self.info.get("delete_platform_video", False):
             delete_delay = self.info.get("delete_delay")
-            tencent_logger.info(f"[删除流程] 准备开始删除视频，等待 {delete_delay} 秒")
+            tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 准备开始删除视频，等待 {delete_delay} 秒")
             await asyncio.sleep(delete_delay)
 
             try:
@@ -490,7 +499,7 @@ class TencentVideo(object):
                 while True:  # 外层循环，直到找不到匹配的post_time为止
                     current_time = time.time()
                     elapsed = current_time - start_time
-                    tencent_logger.info(f"[删除流程] 当前循环已运行 {elapsed:.2f} 秒")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 当前循环已运行 {elapsed:.2f} 秒")
 
                     # 检查是否超时
                     if elapsed > timeout:
@@ -498,35 +507,35 @@ class TencentVideo(object):
                             # 执行删除
                             delete_button = running_cover_item.locator('text=删除')
                             if await delete_button.count() > 0:
-                                tencent_logger.info(f"[删除流程] 超时找到删除按钮，准备删除视频")
+                                tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 超时找到删除按钮，准备删除视频")
                                 await delete_button.locator('..').locator('.opr-item').evaluate(
                                     'el => el.click()')
                                 await page.click(':text-is("确定"):visible')
                                 await asyncio.sleep(2)
-                        tencent_logger.warning(f"[删除流程] 删除操作超过{timeout}秒，自动结束")
+                        tencent_logger.warning(f"  [视频号上传] {self.file_path} [删除流程] 删除操作超过{timeout}秒，自动结束")
                         break
 
                     # 刷新页面
-                    tencent_logger.info("[删除流程] 刷新页面")
+                    tencent_logger.info("  [视频号上传] {self.file_path} [删除流程] 刷新页面")
                     await page.reload()
                     await asyncio.sleep(1)  # 等待页面加载
                     video_list = pub_config.get('video_list')
                     try:
-                        tencent_logger.info("[删除流程] 等待视频列表加载")
+                        tencent_logger.info("  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载")
                         await page.wait_for_selector(video_list, timeout=10000)
                     except Exception as e:
-                        tencent_logger.error(f"[删除流程] 等待视频列表加载超时，未找到 post-feed-item 元素: {str(e)}")
+                        tencent_logger.error(f"  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载超时，未找到 post-feed-item 元素: {str(e)}")
                         return
 
                     found_video = False
                     # 获取所有视频项
                     feed_items = await page.locator(video_list).all()
                     if not feed_items:
-                        tencent_logger.warning("[删除流程] 未找到任何视频项")
+                        tencent_logger.warning("  [视频号上传] {self.file_path} [删除流程] 未找到任何视频项")
                         break
 
                     feed_count = len(feed_items)
-                    tencent_logger.info(f"[删除流程] 找到 {feed_count} 个视频项")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 找到 {feed_count} 个视频项")
 
                     # 检查所有项是否都包含effective-time
                     all_have_effective_time = True
@@ -534,7 +543,7 @@ class TencentVideo(object):
                     for index, item in enumerate(feed_items):
                         try:
                             effective_time = await item.locator('.effective-time').count()
-                            tencent_logger.info(f"[删除流程] 检查有效时间: {effective_time}")
+                            tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 检查有效时间: {effective_time}")
                             if effective_time == 0:
                                 all_have_effective_time = False
                             item_title = item.locator('.post-title')
@@ -547,18 +556,18 @@ class TencentVideo(object):
                                         # 检查是否启用了完毕后删除设置
                                         if self.info and self.info.get("delete_after_complete", False):
                                             running_cover_item = item
-                                            tencent_logger.info(f"[删除流程] 视频正在处理中，刷新页面后重试")
+                                            tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 视频正在处理中，刷新页面后重试")
                                             await page.reload()
                                             found_video = True
                                             is_first_time = True
                                             await asyncio.sleep(4)
                                             break  # 跳出内层循环，继续外层循环
                                         else:
-                                            tencent_logger.info(f"[删除流程] 视频正在处理中，但未启用完毕后删除设置，跳过处理")
+                                            tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 视频正在处理中，但未启用完毕后删除设置，跳过处理")
                                     # 执行删除
                                     delete_button = item.locator('text=删除')
                                     if await delete_button.count() > 0:
-                                        tencent_logger.info(f"[删除流程] 找到删除按钮，准备删除视频")
+                                        tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 找到删除按钮，准备删除视频")
                                         await delete_button.locator('..').locator('.opr-item').evaluate(
                                             'el => el.click()')
                                         await page.click(':text-is("确定"):visible')
@@ -567,21 +576,21 @@ class TencentVideo(object):
                                         await asyncio.sleep(2)
                                         break
                         except Exception as e:
-                            tencent_logger.exception(f"[删除流程] 处理视频项时出错：{str(e)}")
+                            tencent_logger.exception(f"  [视频号上传] {self.file_path} [删除流程] 处理视频项时出错：{str(e)}")
                             continue
                     if all_have_effective_time:
-                        tencent_logger.info("[删除流程] 所有视频项都包含effective-time，调用批量删除方法")
+                        tencent_logger.info("  [视频号上传] {self.file_path} [删除流程] 所有视频项都包含effective-time，调用批量删除方法")
                         await delete_videos_by_conditions(page, 0, 10, page_index=5, video_title='waitdel-')
                     # 如果没有找到匹配的视频，说明删除完成
                     if not found_video:
                         if is_first_time:
-                            tencent_logger.info(f"[删除流程] 未找到title为 {self.title} 的视频，删除操作完成")
+                            tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 未找到title为 {self.title} 的视频，删除操作完成")
                         else:
-                            tencent_logger.warning(f"[删除流程] 未找到要删除的视频")
+                            tencent_logger.warning(f"  [视频号上传] {self.file_path} [删除流程] 未找到要删除的视频")
                         break
 
             except Exception as e:
-                tencent_logger.exception(f"[删除流程] 删除视频时出错：{str(e)}")
+                tencent_logger.exception(f"  [视频号上传] {self.file_path} [删除流程] 删除视频时出错：{str(e)}")
 
     async def add_short_play_by_baobai(self, page):
         # 等待并点击"选择链接"按钮
@@ -615,7 +624,7 @@ class TencentVideo(object):
         # 优先使用展示剧名进行匹配
         match_title = display_name if display_name else playlet_title
         jishu = anchor_info.get("jishu", None)
-        tencent_logger.info(f"开始添加短剧: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
+        tencent_logger.info(f"  [视频号上传] {self.file_path} 开始添加短剧: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
 
         # 填充短剧名称
         # 设置开始时间和超时时间
@@ -644,7 +653,7 @@ class TencentVideo(object):
                     extinfo = await text_element.locator('.extinfo').text_content()
                     # 获取标题文本
                     text_content = await title_element.text_content()
-                    tencent_logger.info(f'找到短剧标题：{text_content}')
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 找到短剧标题：{text_content}')
 
                     # 检查标题是否匹配
                     if not jishu or (jishu and str(jishu) in extinfo):
@@ -656,7 +665,7 @@ class TencentVideo(object):
                         have_platlet = False
                     if have_platlet:
                         await title_element.evaluate('el => el.click()')
-                        tencent_logger.info(f'点击了匹配【{match_title}】的{jishu}短剧')
+                        tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了匹配【{match_title}】的{jishu}短剧')
                         found = True
                         break
 
@@ -670,7 +679,7 @@ class TencentVideo(object):
                     # 查找下一页按钮
                     next_page = page.locator('a:has-text("下一页")')
                     if await next_page.count() > 0 and await next_page.is_visible():
-                        tencent_logger.info('当前页未找到，点击下一页继续查找')
+                        tencent_logger.info(f'  [视频号上传] {self.file_path} 当前页未找到，点击下一页继续查找')
                         await next_page.click()
                         # 重置重试计数
                         retry_count = 0
@@ -678,17 +687,17 @@ class TencentVideo(object):
                         # 等待页面加载
                         await asyncio.sleep(1)
 
-                tencent_logger.info('未找到匹配元素，等待0.5秒后重试...')
+                tencent_logger.info(f'  [视频号上传] {self.file_path} 未找到匹配元素，等待0.5秒后重试...')
                 await asyncio.sleep(0.5)
 
             except Exception as e:
-                tencent_logger.exception(f'查找高亮元素时发生错误')
+                tencent_logger.exception(f'  [视频号上传] {self.file_path} 查找高亮元素时发生错误')
                 await asyncio.sleep(0.5)
                 continue
 
         if not found:
-            tencent_logger.error(f'超时{timeout}秒，未找到匹配【{match_title}】的短剧')
-            raise UpdateError(f"未找到匹配的短剧：{match_title}")
+            tencent_logger.error(f'  [视频号上传] {self.file_path} 超时{timeout}秒，未找到匹配【{match_title}】的短剧')
+            raise UpdateError(f"  [视频号上传] {self.file_path} 未找到匹配的短剧：{match_title}")
 
     # async def add_short_title(self, page):
     #     short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
@@ -705,12 +714,12 @@ class TencentVideo(object):
             try:
                 # 检查是否超时
                 if time.time() - start_time > timeout:
-                    raise UpdateError(f"发布操作超过两分钟，强制结束{self.file_path}")
+                    raise UpdateError(f"  [视频号上传] {self.file_path} 发布操作超过两分钟，强制结束{self.file_path}")
 
                 await asyncio.sleep(10)
                 # 检查是否出现"将此次编辑保留?"文本
                 has_edit_retain = await page.locator('div:has-text("将此次编辑保留?")').count() > 0
-                tencent_logger.info(f"  [-] 是否找到编辑保留提示框: {has_edit_retain}")
+                tencent_logger.info(f"  [视频号上传] {self.file_path} 是否找到编辑保留提示框: {has_edit_retain}")
 
                 if has_edit_retain:
                     # 查找并点击"不保存"按钮，直接校验可见性
@@ -719,18 +728,18 @@ class TencentVideo(object):
                     if has_no_save_button:
                         await no_save_button.click()
                         await page.goto('https://channels.weixin.qq.com/platform/post/list')
-                        tencent_logger.info("  [-] 已点击不保存按钮")
+                        tencent_logger.info(f"  [视频号上传] {self.file_path} 已点击不保存按钮")
                         break
                     else:
-                        tencent_logger.warning("  [-] 未找到可见的不保存按钮")
+                        tencent_logger.warning(f"  [视频号上传] {self.file_path} 未找到可见的不保存按钮")
 
                 up_button = pub_config.get('up_button')
                 publish_buttion = page.locator(up_button)
                 if await publish_buttion.count():
                     await publish_buttion.click()
-                    tencent_logger.info("  [-] 已点击发布按钮")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} 已点击发布按钮")
                 await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=1500)
-                tencent_logger.success("  [-]视频发布成功")
+                tencent_logger.success(f"  [视频号上传] {self.file_path} 视频发布成功")
                 break
             except UpdateError as e:
                 raise e
@@ -739,11 +748,11 @@ class TencentVideo(object):
                     raise e  # 直接抛出异常
                 current_url = page.url
                 if "https://channels.weixin.qq.com/platform/post/list" in current_url:
-                    tencent_logger.success("  [-]视频发布成功")
+                    tencent_logger.success(f"  [视频号上传] {self.file_path} 视频发布成功")
                     break
                 else:
-                    tencent_logger.exception(f"  [-] Exception: {e}")
-                    tencent_logger.info("  [-] 视频正在发布中...")
+                    tencent_logger.exception(f"  [视频号上传] {self.file_path} Exception: {e}")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} 视频正在发布中...")
                     await asyncio.sleep(0.5)
 
     async def detect_upload_status(self, page):
@@ -753,21 +762,21 @@ class TencentVideo(object):
                 # 匹配删除按钮，代表视频上传完毕
                 if "weui-desktop-btn_disabled" not in await page.get_by_role("button", name="发表").get_attribute(
                         'class'):
-                    tencent_logger.info("  [-]视频上传完毕")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} 视频上传完毕")
                     break
                 else:
-                    tencent_logger.info("  [-] 正在上传视频中...")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} 正在上传视频中...")
                     await asyncio.sleep(2)
                     # 出错了视频出错
                     if await page.locator('div.status-msg.error').count() and await page.locator(
                             'div.media-status-content div.tag-inner:has-text("删除")').count():
-                        tencent_logger.error("  [-] 发现上传出错了...准备重试")
+                        tencent_logger.error(f"  [视频号上传] {self.file_path} 发现上传出错了...准备重试")
                         await self.handle_upload_error(page)
             except Exception as e:
-                tencent_logger.exception('上传中...')
+                tencent_logger.exception(f'  [视频号上传] {self.file_path} 上传中...')
                 if 'Target page, context or browser has been closed' in e.message:
                     raise e  # 直接抛出异常
-                tencent_logger.info("  [-] 正在上传视频中...")
+                tencent_logger.info(f"  [视频号上传] {self.file_path} 正在上传视频中...")
                 await asyncio.sleep(2)
 
     async def add_title_tags(self, page):
@@ -777,7 +786,7 @@ class TencentVideo(object):
         for index, tag in enumerate(self.tags, start=1):
             await page.keyboard.type("#" + tag)
             await page.keyboard.press("Space")
-        tencent_logger.info(f"成功添加hashtag: {len(self.tags)}")
+        tencent_logger.info(f"  [视频号上传] {self.file_path} 成功添加hashtag: {len(self.tags)}")
 
     async def create_collection(self, page):
         await page.get_by_text("创建新合集").click()
@@ -799,7 +808,7 @@ class TencentVideo(object):
             await page.locator('.create-dialog-success-wrap button:has-text("我知道了")').click()
         except:
             try:
-                tencent_logger.exception('我知道了，没找到')
+                tencent_logger.exception(f'  [视频号上传] {self.file_path} 我知道了，没找到')
                 ycz = page.locator('div:text("此标题与现有合集重复，请修改标题后再试")')
                 if await ycz.count() > 0:
                     qx = page.locator('button:text("取消")')
@@ -837,7 +846,7 @@ class TencentVideo(object):
             if len(collection_elements) > 0:
                 break
             if time.time() - start_time > 5:  # 5秒超时
-                tencent_logger.warning("等待合集列表加载超时")
+                tencent_logger.warning(f"  [视频号上传] {self.file_path} 等待合集列表加载超时")
                 return False
             await asyncio.sleep(0.5)
 
@@ -849,21 +858,21 @@ class TencentVideo(object):
             collection_elements = await page.locator('.option-list-wrap').locator(
                 '.option-item .item:not(:has-text("创建新合集"))').all()
             current_count = len(collection_elements)
-            tencent_logger.info(f'当前找到 {current_count} 个合集')
+            tencent_logger.info(f'  [视频号上传] {self.file_path} 当前找到 {current_count} 个合集')
 
             # 如果数量没有增加,说明已经到底了
             if current_count == last_count:
-                tencent_logger.info('合集数量未增加，可能已到底部')
+                tencent_logger.info(f'  [视频号上传] {self.file_path} 合集数量未增加，可能已到底部')
                 break
 
             # 查找匹配的合集
             for element in collection_elements:
                 text = await element.locator('.name').text_content()
-                tencent_logger.info(f'找到合集：{text} 需要选择合集：{self.collection}')
+                tencent_logger.info(f'  [视频号上传] {self.file_path} 找到合集：{text} 需要选择合集：{self.collection}')
                 if text.strip() == self.collection:
                     # 使用JavaScript来执行点击操作
                     await element.evaluate('el => el.click()')
-                    tencent_logger.info(f"成功选择合集: {self.collection}")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} 成功选择合集: {self.collection}")
                     found = True
                     break
 
@@ -880,7 +889,7 @@ class TencentVideo(object):
                     # 获取滚动容器的位置和尺寸
                     box = await scroll_container.bounding_box()
                     if box:
-                        tencent_logger.info(f'找到滚动容器，位置: {box}')
+                        tencent_logger.info(f'  [视频号上传] {self.file_path} 找到滚动容器，位置: {box}')
                         # 先滚动到底部
                         await page.evaluate('''(container) => {
                             if (container) {
@@ -890,7 +899,7 @@ class TencentVideo(object):
                             }
                             return { success: false };
                         }''', await scroll_container.element_handle())
-                        tencent_logger.info('已执行滚动到底部操作')
+                        tencent_logger.info('  [视频号上传] {self.file_path} 已执行滚动到底部操作')
 
                         # 等待一下让内容加载
                         await asyncio.sleep(0.5)
@@ -923,11 +932,11 @@ class TencentVideo(object):
                             return { success: false };
                         }''', await scroll_container.element_handle())
                     else:
-                        tencent_logger.warning('找到滚动容器但无法获取位置信息')
+                        tencent_logger.warning(f'  [视频号上传] {self.file_path} 找到滚动容器但无法获取位置信息')
                 else:
-                    tencent_logger.warning('未找到滚动容器')
+                    tencent_logger.warning(f'  [视频号上传] {self.file_path} 未找到滚动容器')
             except Exception as e:
-                tencent_logger.exception(f'滚动操作出错: {str(e)}')
+                tencent_logger.exception(f'  [视频号上传] {self.file_path} 滚动操作出错: {str(e)}')
 
             # 等待新内容加载
             await asyncio.sleep(1)
