@@ -383,7 +383,6 @@ class TencentVideo(object):
         upload_count = 1
         if self.info and "video_upload_count" in self.info:
             upload_count = max(1, int(self.info.get("video_upload_count", 1)))  # 确保至少上传1次
-            tencent_logger.info(f'  [视频号上传] {self.file_path} 计划上传 {upload_count} 次 -------{self.title}.mp4')
         for i in range(upload_count):
             tencent_logger.info(f'  [视频号上传] {self.file_path} 正在进行第 {i + 1}/{upload_count} 次上传 -------{self.title}.mp4')
             # 访问指定的 URL
