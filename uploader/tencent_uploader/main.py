@@ -771,6 +771,9 @@ class TencentVideo(object):
                             'div.media-status-content div.tag-inner:has-text("删除")').count():
                         tencent_logger.error(f"  [视频号上传] {self.file_path} 发现上传出错了...准备重试")
                         await self.handle_upload_error(page)
+
+            except UpdateError as e:
+                raise e
             except Exception as e:
                 tencent_logger.exception(f'  [视频号上传] {self.file_path} 上传中...')
                 if 'Target page, context or browser has been closed' in e.message:
