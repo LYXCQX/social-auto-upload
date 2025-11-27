@@ -145,7 +145,7 @@ async def get_tencent_cookie_br(account_file, browser):
             break
         elapsed_time = time.time() - start_time
         # 检查是否超过了超时时间
-        if elapsed_time > 120:
+        if elapsed_time > 1200:
             raise TimeoutError("操作超时，跳出循环")
     user_id = await get_user_id(page)
     user_name = await page.locator('.finder-nickname').text_content()

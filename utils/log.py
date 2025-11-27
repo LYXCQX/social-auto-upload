@@ -76,12 +76,12 @@ def create_logger(log_name: str, file_path: str):
     log_file.parent.mkdir(parents=True, exist_ok=True)
     try:
         logger.add(str(log_file), filter=filter_record, level="INFO",
-                  rotation=safe_rotation_function, retention="3 days",  # 保留3天的日志，自动清理3天前的日志
+                  rotation="00:00", retention="7 days",  # 每天午夜轮转，保留7天的日志
                   backtrace=True, diagnose=True, delay=True)
     except Exception as e:
         # Fallback: add logger without rotation if custom rotation fails
         logger.add(str(log_file), filter=filter_record, level="INFO",
-                  retention="3 days",
+                  retention="7 days",
                   backtrace=True, diagnose=True, delay=True)
     return logger.bind(business_name=log_name)
 
@@ -101,12 +101,12 @@ except:
     # 如果无法添加控制台输出，只记录到文件
     pass
 
-# 添加文件日志
+# 添加文件日志 - 按天轮转，每天一个日志文件
 try:
     logger.add(
         log_dir / "app_{time:YYYY-MM-DD}.log",
-        rotation=safe_rotation_function,
-        retention="3 days",  # 保留3天的日志，自动清理3天前的日志
+        rotation="00:00",  # 每天午夜轮转
+        retention="7 days",  # 保留7天的日志，自动清理7天前的日志
         encoding="utf-8",
         format=log_formatter,
         level="INFO",
@@ -118,7 +118,7 @@ except Exception as e:
     # Fallback: add logger without rotation if custom rotation fails
     logger.add(
         log_dir / "app_{time:YYYY-MM-DD}.log",
-        retention="3 days",
+        retention="7 days",
         encoding="utf-8",
         format=log_formatter,
         level="INFO",
