@@ -515,12 +515,12 @@ class TencentVideo(object):
                         break
 
                     # 刷新页面
-                    tencent_logger.info("  [视频号上传] {self.file_path} [删除流程] 刷新页面")
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 刷新页面")
                     await page.reload()
                     await asyncio.sleep(1)  # 等待页面加载
                     video_list = pub_config.get('video_list')
                     try:
-                        tencent_logger.info("  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载")
+                        tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载")
                         await page.wait_for_selector(video_list, timeout=10000)
                     except Exception as e:
                         tencent_logger.error(f"  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载超时，未找到 post-feed-item 元素: {str(e)}")
@@ -530,7 +530,7 @@ class TencentVideo(object):
                     # 获取所有视频项
                     feed_items = await page.locator(video_list).all()
                     if not feed_items:
-                        tencent_logger.warning("  [视频号上传] {self.file_path} [删除流程] 未找到任何视频项")
+                        tencent_logger.warning(f"  [视频号上传] {self.file_path} [删除流程] 未找到任何视频项")
                         break
 
                     feed_count = len(feed_items)
@@ -578,7 +578,7 @@ class TencentVideo(object):
                             tencent_logger.exception(f"  [视频号上传] {self.file_path} [删除流程] 处理视频项时出错：{str(e)}")
                             continue
                     if all_have_effective_time:
-                        tencent_logger.info("  [视频号上传] {self.file_path} [删除流程] 所有视频项都包含effective-time，调用批量删除方法")
+                        tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 所有视频项都包含effective-time，调用批量删除方法")
                         await delete_videos_by_conditions(page, 0, 10, page_index=5, video_title='waitdel-')
                     # 如果没有找到匹配的视频，说明删除完成
                     if not found_video:
