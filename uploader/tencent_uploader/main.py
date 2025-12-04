@@ -448,7 +448,7 @@ class TencentVideo(object):
             if self.info and self.info.get("auto_comment_enabled", False) and self.info.get("auto_comment_text", None) :
                 await add_comment(page,self.info.get("auto_comment_text", None))
         if self.info and self.info.get("delete_after_play", False):
-            await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=5)
+            await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=10)
             # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
 
 
@@ -715,7 +715,7 @@ class TencentVideo(object):
                 if time.time() - start_time > timeout:
                     raise UpdateError(f"  [视频号上传] {self.file_path} 发布操作超过两分钟，强制结束{self.file_path}")
 
-                await asyncio.sleep(10)
+                await asyncio.sleep(2)
                 # 检查是否出现"将此次编辑保留?"文本
                 has_edit_retain = await page.locator('div:has-text("将此次编辑保留?")').count() > 0
                 tencent_logger.info(f"  [视频号上传] {self.file_path} 是否找到编辑保留提示框: {has_edit_retain}")
@@ -755,9 +755,22 @@ class TencentVideo(object):
                     await asyncio.sleep(0.5)
 
     async def detect_upload_status(self, page):
+        upload_tip_count = 0  # 记录upload-tip标签出现的次数
         while True:
             # 匹配删除按钮，代表视频上传完毕，如果不存在，代表视频正在上传，则等待
             try:
+                # 检测是否出现了class为upload-tip的标签（仅当页面可见时计数）
+                visible_upload_tips = await page.locator('.upload-tip:visible').count()
+                if visible_upload_tips > 0:
+                    upload_tip_count += 1
+                    tencent_logger.warning(f"  [视频号上传] {self.file_path} 检测到upload-tip标签（第{upload_tip_count}次）")
+                    
+                    # 如果出现三次，抛出异常
+                    if upload_tip_count >= 3:
+                        msg = f"  [视频号上传] {self.file_path} 上传视频解析失败，请检查视频"
+                        tencent_logger.error(msg)
+                        raise UpdateError(msg)
+                
                 # 匹配删除按钮，代表视频上传完毕
                 if "weui-desktop-btn_disabled" not in await page.get_by_role("button", name="发表").get_attribute(
                         'class'):
