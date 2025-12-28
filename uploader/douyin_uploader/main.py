@@ -309,6 +309,7 @@ class DouYinVideo(object):
             elif self.info.get('douyin_publish_type') == '分销':
                 # 分销发布逻辑 - 调用自动生成的发布方法
                 pub_files = await fx_util.fx_publish(self.info, page,self)
+                await context.storage_state(path=self.account_file)
                 return True,pub_files
             elif self.info.get('douyin_publish_type') == '抖音发布':
                 if playlet_title:

@@ -628,7 +628,7 @@ class TencentVideo(object):
         # 填充短剧名称
         # 设置开始时间和超时时间
         start_time = time.time()
-        timeout = 20  # 20秒超时
+        timeout = 120  # 20秒超时
         found = False
         retry_count = 0
         page_index = 1
@@ -674,9 +674,9 @@ class TencentVideo(object):
                 retry_count += 1
 
                 # 如果循环3次还没找到，尝试翻页
-                if retry_count >= 3:
+                if retry_count >= 2:
                     # 查找下一页按钮
-                    next_page = page.locator('a:has-text("下一页")')
+                    next_page = page.locator('a:has-text("下一页"):visible')
                     if await next_page.count() > 0 and await next_page.is_visible():
                         tencent_logger.info(f'  [视频号上传] {self.file_path} 当前页未找到，点击下一页继续查找')
                         await next_page.click()
@@ -685,6 +685,8 @@ class TencentVideo(object):
                         page_index += 1
                         # 等待页面加载
                         await asyncio.sleep(1)
+                    else:
+                        break
 
                 tencent_logger.info(f'  [视频号上传] {self.file_path} 未找到匹配元素，等待0.5秒后重试...')
                 await asyncio.sleep(0.5)
