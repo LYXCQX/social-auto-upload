@@ -646,7 +646,8 @@ class TencentVideo(object):
                 # 直接获取所有非禁用短剧项中的标题元素
                 drama_text_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-text').all()
 
-                # 遍历所有短剧标题元素
+                # 先收集所有匹配的剧名
+                matched_dramas = []
                 for text_element in drama_text_elements:
                     title_element = text_element.locator('.drama-title')
                     extinfo = await text_element.locator('.extinfo').text_content()
@@ -662,11 +663,33 @@ class TencentVideo(object):
                             have_platlet = match_title in text_content
                     else:
                         have_platlet = False
+                    
                     if have_platlet:
-                        await title_element.evaluate('el => el.click()')
-                        tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了匹配【{match_title}】的{jishu}短剧')
-                        found = True
-                        break
+                        matched_dramas.append(title_element)
+                
+                # 根据匹配数量决定挂载哪一个
+                if matched_dramas:
+                    matched_count = len(matched_dramas)
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 找到 {matched_count} 个匹配【{match_title}】的短剧')
+                    
+                    # 根据数量选择要挂载的剧名
+                    if matched_count == 2:
+                        # 有2个相同剧名，挂载第2个（索引1）
+                        selected_index = 1
+                        tencent_logger.info(f'  [视频号上传] {self.file_path} 有2个相同剧名，挂载第2个')
+                    elif matched_count >= 3:
+                        # 有3个或更多相同剧名，挂载第3个（索引2）
+                        selected_index = 2
+                        tencent_logger.info(f'  [视频号上传] {self.file_path} 有{matched_count}个相同剧名，挂载第3个')
+                    else:
+                        # 只有1个，挂载第1个（索引0）
+                        selected_index = 0
+                        tencent_logger.info(f'  [视频号上传] {self.file_path} 只有1个匹配剧名，挂载第1个')
+                    
+                    # 点击选中的剧名
+                    await matched_dramas[selected_index].evaluate('el => el.click()')
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了第{selected_index + 1}个匹配【{match_title}】的{jishu}短剧')
+                    found = True
 
                 if found:
                     break
