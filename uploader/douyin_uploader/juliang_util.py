@@ -171,7 +171,7 @@ async def juliang_cookie_gen_br(account_file, browser):
             await browser.close()
     except Exception as e:
         douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
-    # return user_id, user_name, douyin_id
+    return user_id, user_name, douyin_id
 
 
 async def xt_have_task(page, playlet_title,pub_config):
