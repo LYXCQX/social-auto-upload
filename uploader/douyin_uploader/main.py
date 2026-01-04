@@ -6,7 +6,6 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
-import loguru
 from camoufox import AsyncCamoufox
 from dotenv import load_dotenv
 from patchright.async_api import Playwright, async_playwright, Page
@@ -19,6 +18,7 @@ from social_auto_upload.utils.bus_exception import UpdateError, BusError
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import douyin_logger
 
+from log import logger
 from social_auto_upload.uploader.douyin_uploader.main_tz import add_declaration, add_goods, get_title_tag
 
 from task_crawler import TaskCrawler, PlatformType, TaskType
@@ -213,7 +213,7 @@ async def douyin_cookie_gen_br(account_file, browser):
             raise TimeoutError("操作超时，跳出循环")
     user_id = await get_user_id(page)
     user_name = await page.locator('[class^="header-"] [class^="name-"]').text_content()
-    loguru.logger.info(f'{user_id}---{user_name}')
+    logger.info(f'{user_id}---{user_name}')
     # 点击调试器的继续，保存cookie
     await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_DOUYIN, user_name))
     cookie_str, cookie_dict = convert_cookies(await context.cookies())
@@ -226,7 +226,7 @@ async def douyin_cookie_gen_br(account_file, browser):
             # 获取请求头中的cookie
             headers = route.request.headers
             response_data = headers.get('cookie', '')
-            loguru.logger.info(f"获取到cookie: {response_data}")  # 添加日志
+            logger.info(f"获取到cookie: {response_data}")  # 添加日志
         await route.continue_()
 
     await context.close()

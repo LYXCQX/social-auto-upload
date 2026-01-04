@@ -4,12 +4,12 @@ import time
 from datetime import datetime
 from typing import Tuple
 
-import loguru
 from patchright.async_api import Playwright, async_playwright, Page
 from social_auto_upload.utils.base_up_util import dispatch_upload
 import os
 import asyncio
 
+from log import logger
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_KUAISHOU
 from social_auto_upload.utils.file_util import get_account_file
@@ -96,13 +96,13 @@ async def get_ks_cookie(account_file):
         await asyncio.sleep(0.5)
         user_id = await get_user_id(page)
         user_name = await page.locator('.info-top-name').text_content()
-        loguru.logger.info(f'{user_id}---{user_name}')
+        logger.info(f'{user_id}---{user_name}')
         # 点击调试器的继续，保存cookie
         await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_KUAISHOU, user_name))
         # try:
         #     os.remove(get_upload_login_path('kuaishou'))
         # except:
-        #     loguru.logger.info(f"删除图片失败")
+        #     logger.info(f"删除图片失败")
         return user_id, user_name
 
 

@@ -9,7 +9,6 @@ from datetime import datetime
 import re
 from types import SimpleNamespace
 
-import loguru
 from camoufox import AsyncCamoufox
 from config import PLATFORM
 from config_manager import ConfigManager
@@ -21,6 +20,7 @@ from social_auto_upload.utils.bus_exception import UpdateError
 from social_auto_upload.utils.file_util import get_account_file
 from social_auto_upload.utils.log import tencent_logger
 
+from log import logger
 from social_auto_upload.uploader.tencent_uploader.main_tz import add_original
 
 from social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji, add_comment
@@ -149,7 +149,7 @@ async def get_tencent_cookie_br(account_file, browser):
             raise TimeoutError("操作超时，跳出循环")
     user_id = await get_user_id(page)
     user_name = await page.locator('.finder-nickname').text_content()
-    loguru.logger.info(f'{user_id}---{user_name}')
+    logger.info(f'{user_id}---{user_name}')
     # 点击调试器的继续，保存cookie
     await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
     return user_id, user_name

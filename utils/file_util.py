@@ -8,14 +8,14 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
-import loguru
 import requests
 
+from log import logger
 from social_auto_upload.conf import BASE_DIR
 
 
 def download_video(url, output_filename):
-    loguru.logger.info(f'视频下载链接：{url}')
+    logger.info(f'视频下载链接：{url}')
     try:
         # 发送HTTP GET请求来获取视频数据
 
@@ -29,7 +29,7 @@ def download_video(url, output_filename):
 
         # 检查文件大小是否超过最大限制
         if file_size > max_size_bytes:
-            loguru.logger.error(f"文件太大，大小为 {file_size / (1024 * 1024):.2f} MB，超过最大限制 {max_size_mb} MB。")
+            logger.error(f"文件太大，大小为 {file_size / (1024 * 1024):.2f} MB，超过最大限制 {max_size_mb} MB。")
             return
 
         # tmp_file = base_video_url + 'tmp.mp4'
@@ -42,9 +42,9 @@ def download_video(url, output_filename):
         # 使用ffmpeg将视频文件转换为所需格式（可选）
         # ffmpeg.input(tmp_file).output(output_filename).run(overwrite_output=True)
 
-        loguru.logger.info(f"视频已成功下载到 {output_filename}")
+        logger.info(f"视频已成功下载到 {output_filename}")
     except Exception as e:
-        loguru.logger.error(f"下载视频时发生错误: {e}")
+        logger.error(f"下载视频时发生错误: {e}")
 
 
 def get_mp4_files(folder_path):
@@ -211,7 +211,7 @@ def get_account_file(user_id, platform, user_name=None, *suffixes):
     # 确保cookie_dir目录存在
     if not cookie_dir.exists():
         cookie_dir.mkdir(parents=True)
-        loguru.logger.info(f"文件夹 {cookie_dir} 创建成功")
+        logger.info(f"文件夹 {cookie_dir} 创建成功")
     
     # 构建文件名模式
     if user_name:
@@ -242,12 +242,12 @@ def create_missing_dirs(folder_path):
         dir_path = BASE_DIR / dir_name
         if not dir_path.exists():
             dir_path.mkdir(parents=True)
-            loguru.logger.info(f"文件夹 {dir_path} 创建成功")
+            logger.info(f"文件夹 {dir_path} 创建成功")
             
     # 创建特定的目录
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
-        loguru.logger.info(f"文件夹 {folder_path} 创建成功")
+        logger.info(f"文件夹 {folder_path} 创建成功")
 
 
 @contextmanager

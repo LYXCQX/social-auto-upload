@@ -1,16 +1,15 @@
 # -*- coding: utf-8 -*-
 import base64
-import logging
 import time
 from datetime import datetime
 from typing import Tuple
 
-import loguru
 from patchright.async_api import Playwright, async_playwright, Page
 from social_auto_upload.utils.base_up_util import dispatch_upload
 import os
 import asyncio
 
+from log import logger
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_KUAISHOU
 from social_auto_upload.utils.file_util import get_account_file
@@ -85,7 +84,7 @@ async def get_ks_shop_cookie():
         start_time = time.time()
         while True:
             if login_url == page.url:
-                logging.info('登录中。。。')
+                logger.info('登录中。。。')
                 await asyncio.sleep(0.5)
             else:
                 break
@@ -105,20 +104,20 @@ async def get_ks_shop_cookie():
                     cookies = request.headers.get('cookie', '')
                     response_data = cookies
                 except Exception as e:
-                    logging.exception("响应解析失败", e)
+                    logger.exception("响应解析失败", e)
 
         page.on("response", handle_response)
         await page.goto("https://cps.kwaixiaodian.com/pc/promoter/selection-center/home")
         await asyncio.sleep(0.5)
         user_id = await get_user_id(page)
-        loguru.logger.info(f'{user_id}')
+        logger.info(f'{user_id}')
         
         # 等待获取cookie数据
         start_time = time.time()
         while response_data is None:
             await asyncio.sleep(0.5)
             if time.time() - start_time > 30:  # 设置30秒超时
-                loguru.logger.error("获取cookie超时")
+                logger.error("获取cookie超时")
                 break
                 
         page.remove_listener("response", handle_response)

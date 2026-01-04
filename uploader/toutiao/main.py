@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
-import logging
 import time
 from datetime import datetime
 from typing import Tuple, Any
 
-import loguru
 from patchright.async_api import Playwright, async_playwright, Page
 from social_auto_upload.utils.base_up_util import dispatch_upload
 import os
@@ -14,6 +12,7 @@ import json
 
 from sympy import true
 
+from log import logger
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TOUTIAO
 from social_auto_upload.utils.file_util import get_account_file
