@@ -802,7 +802,7 @@ class TencentVideo(object):
                                 tencent_logger.error(msg)
                                 raise UpdateError(msg)
                             else:
-                                tencent_logger.debug(f"  [视频号上传] {self.file_path} 进度未变化: {current_progress_text}，已等待 {int(elapsed)} 秒")
+                                tencent_logger.info(f"  [视频号上传] {self.file_path} 进度未变化: {current_progress_text}，已等待 {int(elapsed)} 秒")
                         else:
                             # 进度有变化，重置计时
                             last_progress_text = current_progress_text
