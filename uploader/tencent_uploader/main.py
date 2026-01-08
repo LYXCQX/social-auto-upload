@@ -758,28 +758,66 @@ class TencentVideo(object):
 
     async def detect_upload_status(self, page):
         upload_tip_count = 0  # 记录upload-tip标签出现的次数
+        last_progress_text = None  # 上次进度文本
+        progress_unchanged_start = None  # 进度未变化的起始时间
+        PROGRESS_TIMEOUT = 300  # 5分钟超时（秒）
+        
         while True:
             # 匹配删除按钮，代表视频上传完毕，如果不存在，代表视频正在上传，则等待
             try:
-                # 检测是否出现了class为upload-tip的标签（仅当页面可见时计数）
-                visible_upload_tips = await page.locator('.upload-tip:visible').count()
-                if visible_upload_tips > 0:
-                    upload_tip_count += 1
-                    tencent_logger.warning(f"  [视频号上传] {self.file_path} 检测到upload-tip标签（第{upload_tip_count}次）")
-                    
-                    # 如果出现三次，抛出异常
-                    if upload_tip_count >= 3:
-                        msg = f"  [视频号上传] {self.file_path} 上传视频解析失败，请检查视频"
-                        tencent_logger.error(msg)
-                        raise UpdateError(msg)
-                
+                try:
+                    # 检测是否出现了class为upload-tip的标签（仅当页面可见时计数）
+                    visible_upload_tips = await page.locator('.upload-tip:visible').count()
+                    if visible_upload_tips > 0:
+                        upload_tip_count += 1
+                        tencent_logger.warning(f"  [视频号上传] {self.file_path} 检测到upload-tip标签（第{upload_tip_count}次）")
+
+                        # 如果出现三次，抛出异常
+                        if upload_tip_count >= 3:
+                            msg = f"  [视频号上传] {self.file_path} 上传视频解析失败，请检查视频"
+                            tencent_logger.error(msg)
+                            raise UpdateError(msg)
+
+                    # 检测 ant-progress-text 进度是否停滞
+                    progress_locator = page.locator('.ant-progress-text')
+                    if await progress_locator.count() > 0:
+                        current_progress_text = await progress_locator.first.inner_text()
+                        current_time = time.time()
+
+                        # 检查是否包含 check-circle 图标（上传完成但卡住）
+                        check_circle_locator = page.locator('i[aria-label="图标: check-circle"]')
+                        has_check_circle = await check_circle_locator.count() > 0
+
+                        if last_progress_text is None:
+                            last_progress_text = current_progress_text
+                            progress_unchanged_start = current_time
+                        elif current_progress_text == last_progress_text or has_check_circle:
+                            # 进度未变化或已完成但卡住，检查是否超过5分钟
+                            elapsed = current_time - progress_unchanged_start
+                            if elapsed >= PROGRESS_TIMEOUT:
+                                if has_check_circle:
+                                    msg = f"  [视频号上传] {self.file_path} 上传已完成但5分钟无响应，可能异常"
+                                else:
+                                    msg = f"  [视频号上传] {self.file_path} 上传进度已经5分钟没有变动（{current_progress_text}），可能异常"
+                                tencent_logger.error(msg)
+                                raise UpdateError(msg)
+                            else:
+                                tencent_logger.debug(f"  [视频号上传] {self.file_path} 进度未变化: {current_progress_text}，已等待 {int(elapsed)} 秒")
+                        else:
+                            # 进度有变化，重置计时
+                            last_progress_text = current_progress_text
+                            progress_unchanged_start = current_time
+                except UpdateError as e:
+                    raise e
+                except:
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} 校验视频进度异常，可能给class已经变更...")
+
                 # 匹配删除按钮，代表视频上传完毕
                 if "weui-desktop-btn_disabled" not in await page.get_by_role("button", name="发表").get_attribute(
                         'class'):
                     tencent_logger.info(f"  [视频号上传] {self.file_path} 视频上传完毕")
                     break
                 else:
-                    tencent_logger.info(f"  [视频号上传] {self.file_path} 正在上传视频中...")
                     await asyncio.sleep(2)
                     # 出错了视频出错
                     if await page.locator('div.status-msg.error').count() and await page.locator(
