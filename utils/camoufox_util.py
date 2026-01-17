@@ -12,6 +12,7 @@ async def _get_camoufox_config(par_):
     fingerprint = fingerprint_manager.get_or_create_fingerprint(os.path.basename(par_.account_file))
     return {
         'humanize': 0.75,
+        # "showcursor": False,
         'addons': addons,
         'enable_cache': True,
         'geoip': True,
@@ -20,4 +21,18 @@ async def _get_camoufox_config(par_):
         'proxy': par_.proxy_setting,
         'fingerprint': fingerprint,
         'exclude_addons':[DefaultAddons.UBO],
+        "firefox_user_prefs": {
+            "widget.windows.window_occlusion_tracking.enabled": False,
+            "dom.min_background_timeout_value": 0,
+            "dom.timeout.background_throttling_maximum": 0,
+            "privacy.reduceTimerPrecision": False,
+            "browser.startup.minimized": True,
+
+            # 你可以根据需要添加其他首选项，例如：
+            # "dom.disable_page_visibility": False,
+        },
+        'config': {
+            'humanize': True,   # 或 2.0
+            'showcursor': False,
+        },
     }
