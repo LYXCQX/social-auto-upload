@@ -549,28 +549,26 @@ class TencentVideo(object):
                             if await item_title.count() > 0:
                                 title_text = await item_title.text_content()
                                 if title_text.startswith('waitdel-'):
+                                    found_video = True  # 找到了符合条件的视频
                                     # 检查是否存在running-cover标签
                                     running_cover = await item.locator('.running-cover').count()
                                     if running_cover > 0:
                                         # 检查是否启用了完毕后删除设置
                                         if self.info and self.info.get("delete_after_complete", False):
                                             running_cover_item = item
-                                            tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 视频正在处理中，刷新页面后重试")
-                                            await page.reload()
-                                            found_video = True
-                                            is_first_time = True
-                                            await asyncio.sleep(4)
-                                            break  # 跳出内层循环，继续外层循环
+                                            tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 发现转圈视频，先继续查找其他可删除的视频")
+                                            # 不再break，继续查找下一个视频
+                                            continue
                                         else:
                                             tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 视频正在处理中，但未启用完毕后删除设置，跳过处理")
-                                    # 执行删除
+                                            continue
+                                    # 执行删除（没有转圈的视频）
                                     delete_button = item.locator('text=删除')
                                     if await delete_button.count() > 0:
                                         tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 找到删除按钮，准备删除视频")
                                         await delete_button.locator('..').locator('.opr-item').evaluate(
                                             'el => el.click()')
                                         await page.click(':text-is("确定"):visible')
-                                        found_video = True
                                         is_first_time = True
                                         await asyncio.sleep(2)
                                         break
