@@ -287,7 +287,11 @@ class TencentVideo(object):
         match_title = display_name if display_name else playlet_title
 
         match_drama_name = anchor_info.get("match_drama_name", None)
-        playlet_title_tag = anchor_info.get("playlet_title_tag", None)
+        theater = anchor_info.get("theater", None)
+        if theater:
+            playlet_title_tag = theater
+        else:
+            playlet_title_tag = anchor_info.get("playlet_title_tag", None)
         tencent_logger.info(f"  [视频号上传] {self.file_path} 开始添加活动: 搜索剧名[{search_title}] 展示剧名[{match_title}]")
         active_hd = pub_config.get('active_hd')
         # 等待包含"活动"标签的form-item出现
@@ -516,8 +520,9 @@ class TencentVideo(object):
 
                     # 刷新页面
                     tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 刷新页面")
-                    await page.reload()
-                    await asyncio.sleep(1)  # 等待页面加载
+                    if not found_video:
+                        await page.reload()
+                        await asyncio.sleep(1)  # 等待页面加载
                     video_list = pub_config.get('video_list')
                     try:
                         tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载")
@@ -610,6 +615,7 @@ class TencentVideo(object):
         # 获取展示剧名和搜索剧名
         display_name = anchor_info.get("display_name", None)
         search_name = anchor_info.get("search_name", None)
+        theater = anchor_info.get("theater", None)
 
         # 如果没有设置专门的搜索剧名和展示剧名，则使用旧逻辑的剧名
         playlet_title = anchor_info.get("title", None)
@@ -648,6 +654,8 @@ class TencentVideo(object):
                 for text_element in drama_text_elements:
                     title_element = text_element.locator('.drama-title')
                     extinfo = await text_element.locator('.extinfo').text_content()
+                    theater_gf = await text_element.locator('.title').text_content()
+
                     # 获取标题文本
                     text_content = await title_element.text_content()
                     tencent_logger.info(f'  [视频号上传] {self.file_path} 找到短剧标题：{text_content}')
@@ -661,10 +669,13 @@ class TencentVideo(object):
                     else:
                         have_platlet = False
                     if have_platlet:
-                        await title_element.evaluate('el => el.click()')
-                        tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了匹配【{match_title}】的{jishu}短剧')
-                        found = True
-                        break
+                        if not theater or theater == theater_gf:
+                            await title_element.evaluate('el => el.click()')
+                            tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了匹配【{match_title}】的{jishu}短剧')
+                            found = True
+                            break
+                        else:
+                            tencent_logger.info(f'  [视频号上传] {self.file_path} 配置的剧场为{theater}与当前剧场{theater_gf}不匹配')
 
                 if found:
                     break
