@@ -498,7 +498,7 @@ class TencentVideo(object):
                 start_time = time.time()  # 记录开始时间
                 timeout = 300  # 5分钟超时
                 running_cover_item = None
-
+                found_video = False
                 while True:  # 外层循环，直到找不到匹配的post_time为止
                     current_time = time.time()
                     elapsed = current_time - start_time
@@ -526,7 +526,7 @@ class TencentVideo(object):
                     video_list = pub_config.get('video_list')
                     try:
                         tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载")
-                        await page.wait_for_selector(video_list, timeout=10000)
+                        await page.wait_for_selector(video_list, timeout=30000)
                     except Exception as e:
                         tencent_logger.error(f"  [视频号上传] {self.file_path} [删除流程] 等待视频列表加载超时，未找到 post-feed-item 元素: {str(e)}")
                         return
