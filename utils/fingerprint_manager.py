@@ -7,6 +7,7 @@ from datetime import datetime
 from browserforge.fingerprints import FingerprintGenerator
 from social_auto_upload.conf import BASE_DIR
 from social_auto_upload.utils.log import douyin_logger
+from sqlalchemy import text
 
 # ✅ 使用 DBManager 替代直接的 sqlite3 连接
 from db_manager import get_db_manager
@@ -30,13 +31,13 @@ class FingerprintManager:
         # ✅ 使用 DBManager 的会话管理
         with self.db_manager.get_session() as session:
             # 浏览器指纹表
-            session.execute('''CREATE TABLE IF NOT EXISTS fingerprints (
+            session.execute(text('''CREATE TABLE IF NOT EXISTS fingerprints (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 cookie_name TEXT UNIQUE NOT NULL,
                 fingerprint_data TEXT NOT NULL,
                 created_time TEXT DEFAULT CURRENT_TIMESTAMP,
                 last_used TEXT
-            )''')
+            )'''))
     
     def generate_random_fingerprint(self):
         """生成随机浏览器指纹 - 确保各参数一致性"""
