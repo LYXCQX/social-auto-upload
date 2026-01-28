@@ -1,5 +1,4 @@
 import pickle
-import sqlite3
 import json
 import random
 import os
@@ -9,11 +8,16 @@ from browserforge.fingerprints import FingerprintGenerator
 from social_auto_upload.conf import BASE_DIR
 from social_auto_upload.utils.log import douyin_logger
 
+# ✅ 使用 DBManager 替代直接的 sqlite3 连接
+from db_manager import get_db_manager
+
 class FingerprintManager:
     def __init__(self):
         db_dir = os.path.join(BASE_DIR, 'db')
         os.makedirs(db_dir, exist_ok=True)
         self.db_path = os.path.join(db_dir, 'ctm.db')
+        # ✅ 获取 DBManager 实例
+        self.db_manager = get_db_manager()
         self.init_db()
     
     def init_db(self):
@@ -23,20 +27,16 @@ class FingerprintManager:
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)
         
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        
-        # 浏览器指纹表
-        c.execute('''CREATE TABLE IF NOT EXISTS fingerprints (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cookie_name TEXT UNIQUE NOT NULL,
-            fingerprint_data TEXT NOT NULL,
-            created_time TEXT DEFAULT CURRENT_TIMESTAMP,
-            last_used TEXT
-        )''')
-        
-        conn.commit()
-        conn.close()
+        # ✅ 使用 DBManager 的会话管理
+        with self.db_manager.get_session() as session:
+            # 浏览器指纹表
+            session.execute('''CREATE TABLE IF NOT EXISTS fingerprints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cookie_name TEXT UNIQUE NOT NULL,
+                fingerprint_data TEXT NOT NULL,
+                created_time TEXT DEFAULT CURRENT_TIMESTAMP,
+                last_used TEXT
+            )''')
     
     def generate_random_fingerprint(self):
         """生成随机浏览器指纹 - 确保各参数一致性"""
@@ -270,20 +270,19 @@ class FingerprintManager:
     
     def get_or_create_fingerprint(self, cookie_name):
         """获取或创建Cookie对应的指纹"""
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        
-        # 查询现有指纹
-        c.execute('SELECT fingerprint_data FROM fingerprints WHERE cookie_name = ?', (cookie_name,))
-        row = c.fetchone()
+        # ✅ 使用 DBManager 的查询方法
+        row = self.db_manager._execute_query_one(
+            'SELECT fingerprint_data FROM fingerprints WHERE cookie_name = :cookie_name',
+            {'cookie_name': cookie_name}
+        )
         
         if row:
             # 更新最后使用时间
-            c.execute('UPDATE fingerprints SET last_used = ? WHERE cookie_name = ?', 
-                     (datetime.now().isoformat(), cookie_name))
-            conn.commit()
-            conn.close()
-            return pickle.loads(row[0])
+            self.db_manager._execute_write(
+                'UPDATE fingerprints SET last_used = :last_used WHERE cookie_name = :cookie_name',
+                {'last_used': datetime.now().isoformat(), 'cookie_name': cookie_name}
+            )
+            return pickle.loads(row['fingerprint_data'])
         else:
             # 生成新指纹
             fg = FingerprintGenerator(browser='firefox', os=('windows', 'macos'),
@@ -292,11 +291,15 @@ class FingerprintManager:
             fingerprint_json = pickle.dumps(fingerprint)
 
             # 保存到数据库
-            c.execute('''INSERT INTO fingerprints (cookie_name, fingerprint_data, last_used) 
-                        VALUES (?, ?, ?)''',
-                     (cookie_name, fingerprint_json, datetime.now().isoformat()))
-            conn.commit()
-            conn.close()
+            self.db_manager._execute_write(
+                '''INSERT INTO fingerprints (cookie_name, fingerprint_data, last_used) 
+                   VALUES (:cookie_name, :fingerprint_data, :last_used)''',
+                {
+                    'cookie_name': cookie_name,
+                    'fingerprint_data': fingerprint_json,
+                    'last_used': datetime.now().isoformat()
+                }
+            )
             
             print(f"生成新浏览器指纹: {cookie_name}")
             return fingerprint
@@ -304,12 +307,12 @@ class FingerprintManager:
     def delete_fingerprint(self, cookie_name):
         """删除指纹"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            c = conn.cursor()
-            
-            c.execute('DELETE FROM fingerprints WHERE cookie_name = ?', (cookie_name,))
-            conn.commit()
-            conn.close()
+            # ✅ 使用 DBManager 的删除方法
+            self.db_manager._delete(
+                'fingerprints',
+                'cookie_name = :cookie_name',
+                {'cookie_name': cookie_name}
+            )
             
             print(f"删除浏览器指纹: {cookie_name}")
             return True, "删除成功"
@@ -319,48 +322,51 @@ class FingerprintManager:
     
     def get_all_fingerprints(self):
         """获取所有指纹信息"""
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
+        # ✅ 使用 DBManager 的查询方法
+        rows = self.db_manager._execute_query(
+            '''SELECT cookie_name, created_time, last_used 
+               FROM fingerprints ORDER BY created_time DESC'''
+        )
         
-        c.execute('''SELECT cookie_name, created_time, last_used 
-                    FROM fingerprints ORDER BY created_time DESC''')
-        
-        fingerprints = []
-        for row in c.fetchall():
-            fingerprints.append({
-                'cookie_name': row[0],
-                'created_time': row[1],
-                'last_used': row[2]
-            })
-        
-        conn.close()
-        return fingerprints
+        return [
+            {
+                'cookie_name': row['cookie_name'],
+                'created_time': row['created_time'],
+                'last_used': row['last_used']
+            }
+            for row in rows
+        ]
     
     def regenerate_all_fingerprints(self):
         """重新生成所有指纹（修复不一致问题）"""
         try:
-            conn = sqlite3.connect(self.db_path)
-            c = conn.cursor()
-            
-            # 获取所有cookie名称
-            c.execute('SELECT cookie_name FROM fingerprints')
-            cookie_names = [row[0] for row in c.fetchall()]
+            # ✅ 使用 DBManager 的查询方法
+            rows = self.db_manager._execute_query('SELECT cookie_name FROM fingerprints')
+            cookie_names = [row['cookie_name'] for row in rows]
             
             updated_count = 0
+            # ✅ 批量更新操作
+            updates = []
             for cookie_name in cookie_names:
                 # 生成新的一致性指纹
                 new_fingerprint = self.generate_random_fingerprint()
                 fingerprint_json = json.dumps(new_fingerprint, ensure_ascii=False)
                 
-                # 更新数据库
-                c.execute('''UPDATE fingerprints 
-                           SET fingerprint_data = ?, last_used = ? 
-                           WHERE cookie_name = ?''',
-                         (fingerprint_json, datetime.now().isoformat(), cookie_name))
+                updates.append({
+                    'fingerprint_data': fingerprint_json,
+                    'last_used': datetime.now().isoformat(),
+                    'cookie_name': cookie_name
+                })
                 updated_count += 1
             
-            conn.commit()
-            conn.close()
+            # ✅ 批量执行更新
+            if updates:
+                self.db_manager._execute_write_many(
+                    '''UPDATE fingerprints 
+                       SET fingerprint_data = :fingerprint_data, last_used = :last_used 
+                       WHERE cookie_name = :cookie_name''',
+                    updates
+                )
             
             print(f"成功重新生成 {updated_count} 个浏览器指纹")
             return True, f"成功重新生成 {updated_count} 个指纹"
