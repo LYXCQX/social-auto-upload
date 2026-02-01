@@ -199,7 +199,7 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None,pr
 
 class TencentVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None,
-                 local_executable_path=None, info=None, collection=None, declare_original=None, proxy_setting=None, hide_browser=False):
+                 local_executable_path=None, info=None, collection=None, declare_original=None, proxy_setting=None, hide_browser=False, thumbnail_path=None):
         self.title = title[:999]  # 视频标题
         self.file_path = file_path
         self.tags = tags
@@ -214,6 +214,7 @@ class TencentVideo(object):
         self.hide_browser = hide_browser
         self.upload_retry_attempts = 0
         self.max_upload_retries = 3
+        self.thumbnail_path = thumbnail_path
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -718,6 +719,10 @@ class TencentVideo(object):
     #         await short_title_element.fill(short_title)
 
     async def click_publish(self, page):
+        # 在点击发布按钮之前，先处理封面编辑
+        if self.thumbnail_path:
+            await self.edit_thumbnail(page)
+        
         start_time = time.time()
         timeout = 120  # 两分钟超时
         while True:
@@ -889,6 +894,63 @@ class TencentVideo(object):
         if not found:
             await self.create_collection(page)
             found = await self.add_collection(page)
+
+    async def edit_thumbnail(self, page):
+        """编辑视频封面"""
+        try:
+            tencent_logger.info(f"  [视频号上传] {self.file_path} 开始处理封面编辑")
+            
+            # 等待 vertical-img-wrap 出现
+            await page.wait_for_selector('.vertical-img-wrap', state='visible', timeout=10000)
+            
+            # 等待"文件上传中，请等待完成后再编辑"提示消失
+            start_time = time.time()
+            timeout = 60  # 最多等待60秒
+            while time.time() - start_time < timeout:
+                # 在 .vertical-img-wrap 下检查是否存在上传提示文本
+                upload_tip = page.locator('.vertical-img-wrap :has-text("文件上传中，请等待完成后再编辑")')
+                if await upload_tip.count() == 0:
+                    tencent_logger.info(f"  [视频号上传] {self.file_path} 文件上传完成，可以编辑封面")
+                    break
+                tencent_logger.info(f"  [视频号上传] {self.file_path} 文件上传中，等待完成...")
+                await asyncio.sleep(1)
+            
+            # 再次检查提示是否消失
+            upload_tip = page.locator('.vertical-img-wrap :has-text("文件上传中，请等待完成后再编辑")')
+            if await upload_tip.count() > 0:
+                tencent_logger.warning(f"  [视频号上传] {self.file_path} 等待文件上传完成超时，跳过封面编辑")
+                return
+            
+            # 检查"编辑"按钮是否存在
+            edit_button = page.locator('.vertical-img-wrap:has-text("编辑")')
+            
+            if await edit_button.count() > 0:
+                # 使用 JavaScript 点击，避免被其他元素遮挡
+                await edit_button.evaluate('el => el.click()')
+                tencent_logger.info(f"  [视频号上传] {self.file_path} 已点击编辑按钮")
+                
+                # 等待文件选择器出现
+                file_input = page.locator('input[type="file"][accept*="image"]')
+                await file_input.wait_for(state='attached', timeout=5000)
+                
+                # 上传封面图片
+                await file_input.set_input_files(self.thumbnail_path)
+                tencent_logger.info(f"  [视频号上传] {self.file_path} 已上传封面: {self.thumbnail_path}")
+                
+                # 等待并点击确认按钮（注意是"确认"不是"确定"）
+                confirm_button = page.locator('button:has-text("确认"):visible')
+                await confirm_button.wait_for(state='visible', timeout=5000)
+                await confirm_button.click()
+                tencent_logger.success(f"  [视频号上传] {self.file_path} 封面编辑完成")
+                
+                # 等待一下确保操作完成
+                await asyncio.sleep(1)
+            else:
+                tencent_logger.info(f"  [视频号上传] {self.file_path} 未找到编辑按钮")
+                
+        except Exception as e:
+            tencent_logger.exception(f"  [视频号上传] {self.file_path} 编辑封面时出错: {str(e)}")
+            # 封面编辑失败不影响发布流程，继续执行
 
     async def add_collection(self, page):
         if not self.collection:
