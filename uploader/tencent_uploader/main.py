@@ -672,7 +672,7 @@ class TencentVideo(object):
                     if have_platlet:
                         if not theater or theater == theater_gf:
                             await title_element.evaluate('el => el.click()')
-                            tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了匹配【{match_title}】的{jishu}短剧')
+                            tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了剧场为{theater}  {theater_gf} 匹配【{match_title}】的{jishu}短剧')
                             found = True
                             break
                         else:
