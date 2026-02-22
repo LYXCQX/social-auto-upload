@@ -402,7 +402,7 @@ class TencentVideo(object):
             # await self.add_product(page)
             if self.info.get("enable_drama", False):
                 if self.info.get("enable_cps", False):
-                    if 1 < upload_count != i + 1:
+                    if 1 < upload_count != i + 1 and self.info.get("delete_platform_video", False):
                         tencent_logger.info('，，，')
                     else:
                         await self.add_activity(page)
@@ -413,7 +413,7 @@ class TencentVideo(object):
                     # if 1 < upload_count != i + 1:
                     #     tencent_logger.info('，，，')
                     # else:
-                    if 1 < upload_count != i + 1:
+                    if 1 < upload_count != i + 1 and self.info.get("delete_platform_video", False):
                         tencent_logger.info('，，，')
                     else:
                         await add_short_play_by_juji(self,page,pub_config)
