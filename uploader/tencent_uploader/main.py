@@ -61,8 +61,21 @@ async def cookie_auth(account_file, local_executable_path=None, un_close=False,p
             return await cookie_auth_br(account_file, browser, un_close)
     else:
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(headless=hide_browser,
-                                                       executable_path=local_executable_path,proxy=proxy_setting)
+
+            options = {
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--lang=zh-CN',
+                    '--disable-infobars',
+                    '--start-maximized',
+                    '--no-sandbox',
+                    '--disable-web-security'
+                ],
+                'headless': hide_browser,
+                'executable_path': local_executable_path,
+                'proxy': proxy_setting
+            }
+            browser = await playwright.chromium.launch(**options)
             return await cookie_auth_br(account_file, browser, un_close)
 
 
@@ -108,7 +121,12 @@ async def get_tencent_cookie(account_file, local_executable_path=None,proxy_sett
         async with async_playwright() as playwright:
             options = {
                 'args': [
-                    '--lang en-GB'
+                    '--disable-blink-features=AutomationControlled',
+                    '--lang=zh-CN',
+                    '--disable-infobars',
+                    '--start-maximized',
+                    '--no-sandbox',
+                    '--disable-web-security'
                 ],
                 'headless': False,  # Set headless option here
                 'executable_path': local_executable_path,
@@ -366,10 +384,21 @@ class TencentVideo(object):
     async def upload(self, playwright: Playwright,browser) -> tuple[bool, str]:
         if playwright:
             # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
-            browser = await playwright.chromium.launch(
-                headless=self.hide_browser,
-                executable_path=self.local_executable_path,
-                proxy=self.proxy_setting)
+
+            options = {
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--lang=zh-CN',
+                    '--disable-infobars',
+                    '--start-maximized',
+                    '--no-sandbox',
+                    '--disable-web-security'
+                ],
+                'headless': self.hide_browser,  # 保持与原代码一致的逻辑
+                'executable_path': self.local_executable_path,  # 注意使用 self. 前缀
+                'proxy': self.proxy_setting  # 注意使用 self. 前缀
+            }
+            browser = await playwright.chromium.launch(**options)
         # 创建一个浏览器上下文，使用指定的 cookie 文件
         context = await browser.new_context(
             storage_state=f"{self.account_file}",

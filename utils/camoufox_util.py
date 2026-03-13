@@ -62,6 +62,13 @@ async def _get_camoufox_config(par_):
             # 你可以根据需要添加其他首选项，例如：
             # "dom.disable_page_visibility": False,
         },
+        'args': [
+            '--disable-blink-features=AutomationControlled',
+            '--lang=zh-CN',
+            '--disable-infobars',
+            '--no-sandbox',
+            '--disable-web-security'
+        ],
         'config': {
             'humanize': True,   # 或 2.0
             'showcursor': False,
