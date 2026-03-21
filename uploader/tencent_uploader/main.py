@@ -784,6 +784,8 @@ class TencentVideo(object):
                     tencent_logger.info(f"  [视频号上传] {self.file_path} 已点击发布按钮")
                 await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=1500)
                 tencent_logger.success(f"  [视频号上传] {self.file_path} 视频发布成功")
+                # 等待2秒再跳转
+                await asyncio.sleep(2)
                 break
             except UpdateError as e:
                 raise e
@@ -793,6 +795,8 @@ class TencentVideo(object):
                 current_url = page.url
                 if "https://channels.weixin.qq.com/platform/post/list" in current_url:
                     tencent_logger.success(f"  [视频号上传] {self.file_path} 视频发布成功")
+                    # 等待2秒再跳转
+                    await asyncio.sleep(2)
                     break
                 else:
                     tencent_logger.exception(f"  [视频号上传] {self.file_path} Exception: {e}")
