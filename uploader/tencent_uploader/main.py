@@ -53,15 +53,55 @@ def format_str_for_short_title(origin_title: str) -> str:
     return formatted_string
 
 
-async def cookie_auth(account_file, local_executable_path=None, un_close=False,proxy_setting=None,camoufox=False,addons_path=None):
+async def cookie_auth(account_file, local_executable_path=None, un_close=False,proxy_setting=None,camoufox=False,addons_path=None,load_addons=False):
     hide_browser = False if un_close else True
     if camoufox:
-        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=hide_browser,proxy_setting=proxy_setting))
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path if load_addons else None},account_file=account_file,hide_browser=hide_browser,proxy_setting=proxy_setting))
         async with AsyncCamoufox(**camoufox_config) as browser:
             return await cookie_auth_br(account_file, browser, un_close)
     else:
         async with async_playwright() as playwright:
-
+            # 只有在 load_addons=True 且有插件目录时才加载插件
+            if load_addons and addons_path and addons_path.exists() and addons_path.is_dir():
+                addons = [str(item) for item in addons_path.iterdir() if item.is_dir()]
+                if addons:
+                    tencent_logger.info(f"普通浏览器模式：已加载 {len(addons)} 个插件")
+                    # 使用 persistent context 加载插件
+                    args = [
+                        '--disable-blink-features=AutomationControlled',
+                        '--lang=zh-CN',
+                        '--disable-infobars',
+                        '--start-maximized',
+                        '--no-sandbox',
+                        '--disable-web-security'
+                    ]
+                    # 添加插件路径
+                    for addon in addons:
+                        args.append(f'--load-extension={addon}')
+                    # 禁用扩展自动更新
+                    args.append('--disable-extensions-except=' + ','.join(addons))
+                    
+                    # 创建临时用户数据目录
+                    import tempfile
+                    user_data_dir = tempfile.mkdtemp(prefix='playwright_profile_')
+                    
+                    context = await playwright.chromium.launch_persistent_context(
+                        user_data_dir,
+                        headless=False,  # 加载插件时必须使用非无头模式
+                        executable_path=local_executable_path,
+                        proxy=proxy_setting,
+                        args=args
+                    )
+                    # 加载 cookie - 从 storage_state 格式中提取 cookies 数组
+                    storage_state = json.load(open(account_file))
+                    if isinstance(storage_state, dict) and 'cookies' in storage_state:
+                        await context.add_cookies(storage_state['cookies'])
+                    else:
+                        # 如果是直接的 cookies 数组
+                        await context.add_cookies(storage_state)
+                    return await cookie_auth_persistent(context, un_close)
+            
+            # 没有插件或不加载插件时使用普通模式
             options = {
                 'args': [
                     '--disable-blink-features=AutomationControlled',
@@ -106,6 +146,37 @@ async def cookie_auth_br(account_file, browser, un_close):
             tencent_logger.success("  [视频号上传] cookie 有效")
             await context.close()
             await browser.close()
+        return True
+    except:
+        tencent_logger.error(" [视频号上传]等待5秒 cookie 失效")
+        return False
+
+
+async def cookie_auth_persistent(context, un_close):
+    """使用 persistent context 进行 cookie 认证（用于加载插件）"""
+    await set_init_script(context, "persistent_context")
+    # 创建一个新的页面
+    page = await context.new_page()
+    # 访问指定的 URL
+    await page.goto("https://channels.weixin.qq.com/platform/post/create")
+    try:
+        if un_close:
+            # 如果不关闭浏览器，则进入循环等待页面关闭
+            try:
+                # 等待页面关闭
+                await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+            except:
+                # 如果出现异常，可能是用户手动关闭了页面
+                pass
+            finally:
+                try:
+                    await context.close()
+                except:
+                    pass
+        else:
+            await page.wait_for_selector('span:has-text("内容管理")', timeout=5000)  # 等待5秒
+            tencent_logger.success("  [视频号上传] cookie 有效")
+            await context.close()
         return True
     except:
         tencent_logger.error(" [视频号上传]等待5秒 cookie 失效")

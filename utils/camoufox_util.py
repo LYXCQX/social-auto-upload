@@ -33,7 +33,19 @@ async def _get_camoufox_config(par_):
     addons_path = par_.info.get("addons_path")
     addons = []
     if addons_path:
-        addons = [str(item) for item in addons_path.iterdir() if item.is_dir()]
+        try:
+            # 确保路径存在且是目录
+            if addons_path.exists() and addons_path.is_dir():
+                # 加载插件目录下的所有子文件夹
+                addons = [str(item) for item in addons_path.iterdir() if item.is_dir()]
+                if addons:
+                    tencent_logger.info(f"已加载 {len(addons)} 个插件: {[os.path.basename(a) for a in addons]}")
+                else:
+                    tencent_logger.warning(f"插件目录 {addons_path} 下没有找到插件")
+            else:
+                tencent_logger.warning(f"插件目录不存在或不是有效目录: {addons_path}")
+        except Exception as e:
+            tencent_logger.error(f"加载插件时出错: {str(e)}")
     fingerprint = fingerprint_manager.get_or_create_fingerprint(os.path.basename(par_.account_file))
     
     # 如果代理设置存在，先测试是否能访问 api.ipify.org
