@@ -235,23 +235,28 @@ async def add_original(parent_, page):
 #     return post_time
 
 
-async def add_short_play_by_juji(parent_, page,pub_config):
+async def add_short_play_by_juji(parent_, page,pub_config,idx=1,need_click =True):
     # 等待并点击"选择链接"按钮
     baobai_lj = pub_config.get('baobai_lj')
     juji_jjxl = pub_config.get('juji_jjxl')
     juji_xzjj = pub_config.get('juji_xzjj')
     juji_jjss = pub_config.get('juji_jjss')
-    await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
-    await page.click(baobai_lj)
-    # 等待并点击"短剧"选项，使用精确匹配
-    await page.wait_for_selector(juji_jjxl, state='visible', timeout=5000)
-    await page.click(juji_jjxl)
-    # 等待并点击"选择需要添加的短剧"按钮
-    await page.wait_for_selector(juji_xzjj, state='visible', timeout=5000)
-    await page.click(juji_xzjj)
-    # 等待输入框出现
-    await page.wait_for_selector(juji_jjss, state='visible', timeout=5000)
-    await page.click(juji_jjss)
+    # 短剧选择器配置
+    drama_item_selector = pub_config.get('drama_item_selector')
+    drama_title_selector = pub_config.get('drama_title_selector')
+    drama_extinfo_selector = pub_config.get('drama_extinfo_selector')
+    if idx==1:
+        await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
+        await page.click(baobai_lj)
+        # 等待并点击"短剧"选项，使用精确匹配
+        await page.wait_for_selector(juji_jjxl, state='visible', timeout=5000)
+        await page.click(juji_jjxl)
+        # 等待并点击"选择需要添加的短剧"按钮
+        await page.wait_for_selector(juji_xzjj, state='visible', timeout=5000)
+        await page.click(juji_xzjj)
+        # 等待输入框出现
+        await page.wait_for_selector(juji_jjss, state='visible', timeout=5000)
+        await page.click(juji_jjss)
     anchor_info = parent_.info.get("anchor_info", None)
     if not anchor_info:
         raise UpdateError(f"未找到挂短剧参数：{anchor_info}")
@@ -291,15 +296,15 @@ async def add_short_play_by_juji(parent_, page,pub_config):
             # await page.wait_for_selector('.drama-title', timeout=5000)
 
             # 直接获取所有非禁用短剧项中的标题元素
-            drama_text_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-text').all()
+            drama_text_elements = await page.locator(drama_item_selector).all()
 
             # 遍历所有短剧标题元素
             for text_element in drama_text_elements:
-                title_element = text_element.locator('.drama-title')
-                extinfo = await text_element.locator('.extinfo').text_content()
+                title_element = text_element.locator(drama_title_selector)
+                extinfo = await text_element.locator(drama_extinfo_selector).text_content()
                 # 获取标题文本
                 text_content = await title_element.text_content()
-                tencent_logger.info(f'找到短剧标题：{text_content}')
+                tencent_logger.info(f'找到短剧标题：{text_content}   jishu:{jishu} match_title:{match_title}')
 
                 # 检查标题是否匹配
                 if not jishu or (jishu and str(jishu) in extinfo):
@@ -310,8 +315,9 @@ async def add_short_play_by_juji(parent_, page,pub_config):
                 else:
                     have_platlet = False
                 if have_platlet:
-                    await title_element.evaluate('el => el.click()')
-                    tencent_logger.info(f'点击了匹配【{match_title}】的{jishu}短剧')
+                    if need_click:
+                        await title_element.evaluate('el => el.click()')
+                        tencent_logger.info(f'点击了匹配【{match_title}】的{jishu}短剧')
                     found = True
                     break
 

@@ -695,20 +695,30 @@ class TencentVideo(object):
             except Exception as e:
                 tencent_logger.exception(f"  [视频号上传] {self.file_path} [删除流程] 删除视频时出错：{str(e)}")
 
-    async def add_short_play_by_baobai(self, page):
+    async def add_short_play_by_baobai(self, page,idx=1,need_click =True):
         # 等待并点击"选择链接"按钮
         baobai_lj = pub_config.get('baobai_lj')
-        await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
-        await page.click(baobai_lj)
-        # 等待并点击"短剧"选项，使用精确匹配
-        await page.wait_for_selector(':text-is("短剧"), :text-is("小程序短剧")', state='visible', timeout=5000)
-        await page.click(':text-is("短剧"), :text-is("小程序短剧")')
-        # 等待并点击"选择需要添加的短剧"按钮
-        await page.wait_for_selector(':text-is("选择需要添加的短剧")', state='visible', timeout=5000)
-        await page.click(':text-is("选择需要添加的短剧")')
-        # 等待输入框出现
-        await page.wait_for_selector('input[placeholder="请输入短剧名称"]', state='visible', timeout=5000)
-        await page.click('input[placeholder="请输入短剧名称"]')
+        baobai_duanju_selector = pub_config.get('baobai_duanju_selector')
+        baobai_xzjj_selector = pub_config.get('baobai_xzjj_selector')
+        baobai_input_selector = pub_config.get('baobai_input_selector')
+        # 短剧选择器配置
+        drama_item_selector = pub_config.get('drama_item_selector')
+        drama_title_selector = pub_config.get('drama_title_selector')
+        drama_extinfo_selector = pub_config.get('drama_extinfo_selector')
+        drama_theater_selector = pub_config.get('drama_theater_selector')
+        
+        if idx==1:
+            await page.wait_for_selector(baobai_lj, state='visible', timeout=5000)
+            await page.click(baobai_lj)
+            # 等待并点击"短剧"选项，使用精确匹配
+            await page.wait_for_selector(baobai_duanju_selector, state='visible', timeout=5000)
+            await page.click(baobai_duanju_selector)
+            # 等待并点击"选择需要添加的短剧"按钮
+            await page.wait_for_selector(baobai_xzjj_selector, state='visible', timeout=5000)
+            await page.click(baobai_xzjj_selector)
+            # 等待输入框出现
+            await page.wait_for_selector(baobai_input_selector, state='visible', timeout=5000)
+            await page.click(baobai_input_selector)
         anchor_info = self.info.get("anchor_info", None)
         if not anchor_info:
             raise UpdateError(f"未找到挂短剧参数：{anchor_info}")
@@ -738,7 +748,7 @@ class TencentVideo(object):
         retry_count = 0
         page_index = 1
         match_drama_name = anchor_info.get("match_drama_name", None)
-        search_activity_input = page.locator('input[placeholder="请输入短剧名称"]')
+        search_activity_input = page.locator(baobai_input_selector)
         await search_activity_input.fill(search_title)
         while time.time() - start_time < timeout:
             try:
@@ -746,20 +756,20 @@ class TencentVideo(object):
                     # await search_activity_input.clear()
                     await search_activity_input.fill(search_title)
                     await asyncio.sleep(2)
-                await page.wait_for_selector('.drama-title', timeout=5000)
+                await page.wait_for_selector(drama_title_selector, timeout=5000)
 
                 # 直接获取所有非禁用短剧项中的标题元素
-                drama_text_elements = await page.locator('.drama-item:not(.drama-item--disabled) .drama-text').all()
+                drama_text_elements = await page.locator(drama_item_selector).all()
 
                 # 遍历所有短剧标题元素
                 for text_element in drama_text_elements:
-                    title_element = text_element.locator('.drama-title')
-                    extinfo = await text_element.locator('.extinfo').text_content()
-                    theater_gf = await text_element.locator('.title').text_content()
+                    title_element = text_element.locator(drama_title_selector)
+                    extinfo = await text_element.locator(drama_extinfo_selector).text_content()
+                    theater_gf = await text_element.locator(drama_theater_selector).text_content()
 
                     # 获取标题文本
                     text_content = await title_element.text_content()
-                    tencent_logger.info(f'  [视频号上传] {self.file_path} 找到短剧标题：{text_content}')
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 找到短剧标题：{text_content}   jishu:{jishu} match_title:{match_title}  theater_gf {theater_gf}')
 
                     # 检查标题是否匹配
                     if not jishu or (jishu and str(jishu) in extinfo):
@@ -771,8 +781,9 @@ class TencentVideo(object):
                         have_platlet = False
                     if have_platlet:
                         if not theater or theater == theater_gf:
-                            await title_element.evaluate('el => el.click()')
-                            tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了剧场为{theater}  {theater_gf} 匹配【{match_title}】的{jishu}短剧')
+                            if need_click:
+                                await title_element.evaluate('el => el.click()')
+                                tencent_logger.info(f'  [视频号上传] {self.file_path} 点击了剧场为{theater}  {theater_gf} 匹配【{match_title}】的{jishu}短剧')
                             found = True
                             break
                         else:
