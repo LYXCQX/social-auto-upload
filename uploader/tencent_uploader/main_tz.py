@@ -12,6 +12,13 @@ from social_auto_upload.utils.base_social_media import set_init_script
 from social_auto_upload.utils.bus_exception import UpdateError
 
 
+def remove_punctuation(text: str) -> str:
+    """移除字符串中的所有标点符号和空格"""
+    import re
+    # 使用正则表达式移除所有非字母数字字符（包括中英文标点和空格）
+    return re.sub(r'[^\w]', '', text, flags=re.UNICODE)
+
+
 async def delete_video(local_executable_path, account_file, minutes_ago, max_views):
     async with async_playwright() as playwright:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
@@ -308,10 +315,22 @@ async def add_short_play_by_juji(parent_, page,pub_config,idx=1,need_click =True
 
                 # 检查标题是否匹配
                 if not jishu or (jishu and str(jishu) in extinfo):
-                    if match_drama_name:
-                        have_platlet = match_title == text_content
+                    # 获取忽略标点设置
+                    ignore_punctuation = anchor_info.get("ignore_punctuation", False)
+                    
+                    # 根据设置决定是否移除标点符号
+                    if ignore_punctuation:
+                        compare_match_title = remove_punctuation(match_title)
+                        compare_text_content = remove_punctuation(text_content)
+                        tencent_logger.info(f'忽略标点对比：[{compare_match_title}] vs [{compare_text_content}]')
                     else:
-                        have_platlet = match_title in text_content
+                        compare_match_title = match_title
+                        compare_text_content = text_content
+                    
+                    if match_drama_name:
+                        have_platlet = compare_match_title == compare_text_content
+                    else:
+                        have_platlet = compare_match_title in compare_text_content
                 else:
                     have_platlet = False
                 if have_platlet:

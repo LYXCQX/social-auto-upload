@@ -33,6 +33,12 @@ config = ConfigManager()
 pub_config = json.loads(config.get(f'{PLATFORM}_pub_config', "{}")).get('tencent', {})
 
 
+def remove_punctuation(text: str) -> str:
+    """移除字符串中的所有标点符号和空格"""
+    # 使用正则表达式移除所有非字母数字字符（包括中英文标点和空格）
+    return re.sub(r'[^\w]', '', text, flags=re.UNICODE)
+
+
 def format_str_for_short_title(origin_title: str) -> str:
     # 定义允许的特殊字符
     allowed_special_chars = "《》""+?%°"
@@ -429,10 +435,22 @@ class TencentVideo(object):
                 promotion_content = promotion_title.group(1).strip()
                 tencent_logger.info(f'  [视频号上传] {self.file_path} 提取的活动名称：书名号内容={book_content}, 推广前内容={promotion_content}')
 
-                if match_drama_name:
-                    have_platlet = match_title.strip() == book_content.strip()
+                # 获取忽略标点设置
+                ignore_punctuation = anchor_info.get("ignore_punctuation", False)
+                
+                # 根据设置决定是否移除标点符号
+                if ignore_punctuation:
+                    compare_match_title = remove_punctuation(match_title.strip())
+                    compare_book_content = remove_punctuation(book_content.strip())
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 忽略标点对比：[{compare_match_title}] vs [{compare_book_content}]')
                 else:
-                    have_platlet = match_title.strip() in book_content.strip()
+                    compare_match_title = match_title.strip()
+                    compare_book_content = book_content.strip()
+
+                if match_drama_name:
+                    have_platlet = compare_match_title == compare_book_content
+                else:
+                    have_platlet = compare_match_title in compare_book_content
             # else:
             # have_platlet = False
             if have_platlet:
@@ -773,10 +791,22 @@ class TencentVideo(object):
 
                     # 检查标题是否匹配
                     if not jishu or (jishu and str(jishu) in extinfo):
-                        if match_drama_name:
-                            have_platlet = match_title == text_content
+                        # 获取忽略标点设置
+                        ignore_punctuation = anchor_info.get("ignore_punctuation", False)
+                        
+                        # 根据设置决定是否移除标点符号
+                        if ignore_punctuation:
+                            compare_match_title = remove_punctuation(match_title)
+                            compare_text_content = remove_punctuation(text_content)
+                            tencent_logger.info(f'  [视频号上传] {self.file_path} 忽略标点对比：[{compare_match_title}] vs [{compare_text_content}]')
                         else:
-                            have_platlet = match_title in text_content
+                            compare_match_title = match_title
+                            compare_text_content = text_content
+                        
+                        if match_drama_name:
+                            have_platlet = compare_match_title == compare_text_content
+                        else:
+                            have_platlet = compare_match_title in compare_text_content
                     else:
                         have_platlet = False
                     if have_platlet:
