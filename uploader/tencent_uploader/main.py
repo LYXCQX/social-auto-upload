@@ -571,7 +571,7 @@ class TencentVideo(object):
             if self.info and self.info.get("auto_comment_enabled", False) and self.info.get("auto_comment_text", None) :
                 await add_comment(page,self.info.get("auto_comment_text", None))
         if self.info and self.info.get("delete_after_play", False):
-            await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=10)
+            await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=50)
             # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
 
 
