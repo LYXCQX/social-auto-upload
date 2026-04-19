@@ -553,6 +553,28 @@ class TencentVideo(object):
             # 检测上传状态
             await self.detect_upload_status(page)
             if self.publish_date and self.publish_date != 0 and not should_delete:
+                # 检查是否开启了定时功能
+                # 如果定时时间小于当前时间（已过期），使用当前时间+间隔
+                use_schedule = self.info and self.info.get('use_current_time_schedule', False)
+                if use_schedule:
+                    from datetime import datetime
+                    current_time = datetime.now()
+                    # 只有当定时时间比当前时间小时才调整（说明是过期的定时时间）
+                    if self.publish_date < current_time:
+                        # 获取定时间隔（分钟）
+                        schedule_interval = self.info.get('schedule_interval', '5')
+                        try:
+                            from config_util import parse_schedule_interval
+                            interval_minutes = parse_schedule_interval(schedule_interval)
+                        except:
+                            tencent_logger.warning(f"解析定时间隔失败，使用默认值5分钟")
+                            interval_minutes = 5
+                        
+                        # 计算新的定时时间：当前时间 + 定时间隔
+                        from datetime import timedelta
+                        self.publish_date = current_time + timedelta(minutes=interval_minutes)
+                        tencent_logger.info(f"  [视频号上传] {self.file_path} 定时时间已过期，使用当前时间加上定时间隔 {interval_minutes} 分钟，新定时时间为 {self.publish_date}")
+                
                 await self.set_schedule_time_tencent(page, self.publish_date)
             # 添加短标题
             # await self.add_short_title(page)
