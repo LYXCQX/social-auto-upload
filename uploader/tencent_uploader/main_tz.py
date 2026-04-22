@@ -95,7 +95,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                     if await post_time_element.count() > 0:
                         post_time_str = await post_time_element.text_content()
                         # 解析发布时间
-                        post_time = datetime.strptime(post_time_str, '%Y年%m月%d日 %H:%M')
+                        post_time = datetime.strptime(post_time_str.replace('仅自己可见', ''), '%Y年%m月%d日 %H:%M')
                         current_time = datetime.now()
                         time_diff = (current_time - post_time).total_seconds() / 60  # 转换为分钟
 
