@@ -182,12 +182,12 @@ class TouTiaoVideo(object):
                 browser = await playwright.chromium.launch(
                     headless=headless_mode,
                     executable_path=self.local_executable_path,
-                    args=['--start-maximized']
+                    args=['--start-fullscreen']
                 )
             else:
                 browser = await playwright.chromium.launch(
                     headless=headless_mode,
-                    args=['--start-maximized']
+                    args=['--start-fullscreen']
                 )
 
         # 创建一个浏览器上下文，使用指定的 cookie 文件

@@ -11,7 +11,7 @@ async def del_task(playwright: Playwright) -> None:
     # 使用 Chromium 浏览器启动一个浏览器实例
     browser = await playwright.chromium.launch(
         headless=False,
-        args=['--start-maximized']  # 添加启动参数以最大化窗口
+        args=['--start-fullscreen']  # 添加启动参数以最大化窗口
     )
 
     # 创建一个浏览器上下文，使用指定的 cookie 文件

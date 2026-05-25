@@ -66,7 +66,7 @@ async def get_ks_shop_cookie():
         options = {
             'args': [
                 '--lang en-GB',
-                '--start-maximized'
+                '--start-fullscreen'
             ],
 
             'headless': False,  # Set headless option here

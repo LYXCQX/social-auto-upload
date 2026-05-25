@@ -77,7 +77,7 @@ async def cookie_auth(account_file, local_executable_path=None, un_close=False,p
                         '--disable-blink-features=AutomationControlled',
                         '--lang=zh-CN',
                         '--disable-infobars',
-                        '--start-maximized',
+                        '--start-fullscreen',
                         '--no-sandbox',
                         '--disable-web-security'
                     ]
@@ -113,7 +113,7 @@ async def cookie_auth(account_file, local_executable_path=None, un_close=False,p
                     '--disable-blink-features=AutomationControlled',
                     '--lang=zh-CN',
                     '--disable-infobars',
-                    '--start-maximized',
+                    '--start-fullscreen',
                     '--no-sandbox',
                     '--disable-web-security'
                 ],
@@ -201,7 +201,7 @@ async def get_tencent_cookie(account_file, local_executable_path=None,proxy_sett
                     '--disable-blink-features=AutomationControlled',
                     '--lang=zh-CN',
                     '--disable-infobars',
-                    '--start-maximized',
+                    '--start-fullscreen',
                     '--no-sandbox',
                     '--disable-web-security'
                 ],
@@ -479,7 +479,7 @@ class TencentVideo(object):
                     '--disable-blink-features=AutomationControlled',
                     '--lang=zh-CN',
                     '--disable-infobars',
-                    '--start-maximized',
+                    '--start-fullscreen',
                     '--no-sandbox',
                     '--disable-web-security'
                 ],

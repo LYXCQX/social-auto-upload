@@ -63,7 +63,7 @@ async def cookie_auth(account_file, local_executable_path=None,un_close=False,pr
                         '--disable-blink-features=AutomationControlled',
                         '--lang=zh-CN',
                         '--disable-infobars',
-                        '--start-maximized',
+                        '--start-fullscreen',
                         '--no-sandbox',
                         '--disable-web-security'
                     ]
@@ -360,13 +360,13 @@ class DouYinVideo(object):
                     headless=self.hide_browser,
                     executable_path=self.local_executable_path,
                     proxy=self.proxy_setting,
-                    args=['--start-maximized']
+                    args=['--start-fullscreen']
                 )
             else:
                 browser = await playwright.chromium.launch(
                     headless=self.hide_browser,
                     proxy=self.proxy_setting,
-                    args=['--start-maximized']
+                    args=['--start-fullscreen']
                 )
         if self.info.get('douyin_publish_type') == '分销':
             fx_account_path = os.path.join(BASE_DIR, 'cookies', 'fx')
