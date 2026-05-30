@@ -292,6 +292,343 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None,pr
     return True, user_id, user_name
 
 
+async def weidaren_cookie_auth(account_file, local_executable_path=None, un_close=False, proxy_setting=None, camoufox=False, addons_path=None, load_addons=False):
+    """微达人cookie验证"""
+    hide_browser = False if un_close else True
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path if load_addons else None},account_file=account_file,hide_browser=hide_browser,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await weidaren_cookie_auth_br(account_file, browser, un_close)
+    else:
+        async with async_playwright() as playwright:
+            # 只有在 load_addons=True 且有插件目录时才加载插件
+            if load_addons and addons_path and addons_path.exists() and addons_path.is_dir():
+                addons = [str(item) for item in addons_path.iterdir() if item.is_dir()]
+                if addons:
+                    tencent_logger.info(f"微达人普通浏览器模式：已加载 {len(addons)} 个插件")
+                    # 使用 persistent context 加载插件
+                    args = [
+                        '--disable-blink-features=AutomationControlled',
+                        '--lang=zh-CN',
+                        '--disable-infobars',
+                        '--start-fullscreen',
+                        '--no-sandbox',
+                        '--disable-web-security'
+                    ]
+                    # 添加插件路径
+                    for addon in addons:
+                        args.append(f'--load-extension={addon}')
+                    # 禁用扩展自动更新
+                    args.append('--disable-extensions-except=' + ','.join(addons))
+                    
+                    # 创建临时用户数据目录
+                    import tempfile
+                    user_data_dir = tempfile.mkdtemp(prefix='playwright_profile_')
+                    
+                    context = await playwright.chromium.launch_persistent_context(
+                        user_data_dir,
+                        headless=False,  # 加载插件时必须使用非无头模式
+                        executable_path=local_executable_path,
+                        proxy=proxy_setting,
+                        args=args
+                    )
+                    # 加载 cookie - 从 storage_state 格式中提取 cookies 数组
+                    storage_state = json.load(open(account_file))
+                    if isinstance(storage_state, dict) and 'cookies' in storage_state:
+                        await context.add_cookies(storage_state['cookies'])
+                    else:
+                        # 如果是直接的 cookies 数组
+                        await context.add_cookies(storage_state)
+                    return await weidaren_cookie_auth_persistent(context, un_close)
+            
+            # 没有插件或不加载插件时使用普通模式
+            options = {
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--lang=zh-CN',
+                    '--disable-infobars',
+                    '--start-fullscreen',
+                    '--no-sandbox',
+                    '--disable-web-security'
+                ],
+                'headless': hide_browser,
+                'executable_path': local_executable_path,
+                'proxy': proxy_setting
+            }
+            browser = await playwright.chromium.launch(**options)
+            return await weidaren_cookie_auth_br(account_file, browser, un_close)
+
+
+async def weidaren_cookie_auth_br(account_file, browser, un_close):
+    """微达人cookie验证 - 浏览器模式"""
+    context = await browser.new_context(storage_state=account_file)
+    context = await set_init_script(context, os.path.basename(account_file))
+    # 创建一个新的页面
+    page = await context.new_page()
+    # 访问微达人页面
+    await page.goto("https://store.weixin.qq.com/talent/?redirect_url=%2Fchannel%2Ffinder")
+    try:
+        if un_close:
+            # 如果不关闭浏览器，则进入循环等待页面关闭
+            try:
+                # 等待页面关闭
+                await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+            except:
+                # 如果出现异常，可能是用户手动关闭了页面
+                pass
+            finally:
+                try:
+                    await context.close()
+                    await browser.close()
+                except:
+                    pass
+        else:
+            # 检查页面是否有"邀约"字样，表示登录成功
+            await page.wait_for_selector('text=邀约', timeout=5000)  # 等待5秒
+            tencent_logger.success("  [微达人] cookie 有效")
+            await context.close()
+            await browser.close()
+        return True
+    except:
+        tencent_logger.error(" [微达人] 等待5秒 cookie 失效")
+        return False
+
+
+async def weidaren_cookie_auth_persistent(context, un_close):
+    """微达人cookie验证 - persistent context模式（用于加载插件）"""
+    await set_init_script(context, "persistent_context")
+    # 创建一个新的页面
+    page = await context.new_page()
+    # 访问微达人页面
+    await page.goto("https://store.weixin.qq.com/talent/channel/finder")
+    try:
+        if un_close:
+            # 如果不关闭浏览器，则进入循环等待页面关闭
+            try:
+                # 等待页面关闭
+                await page.wait_for_event('close', timeout=0)  # 无限等待直到页面关闭
+            except:
+                # 如果出现异常，可能是用户手动关闭了页面
+                pass
+            finally:
+                try:
+                    await context.close()
+                except:
+                    pass
+        else:
+            # 检查页面是否有"邀约"字样，表示登录成功
+            await page.wait_for_selector('text=邀约', timeout=5000)  # 等待5秒
+            tencent_logger.success("  [微达人] cookie 有效")
+            await context.close()
+        return True
+    except:
+        tencent_logger.error(" [微达人] 等待5秒 cookie 失效")
+        return False
+
+
+async def get_weidaren_cookie(account_file, local_executable_path=None, proxy_setting=None, camoufox=False, addons_path=None):
+    """获取微达人cookie"""
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=False,proxy_setting=proxy_setting))
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            return await get_weidaren_cookie_br(account_file, browser)
+    else:
+        async with async_playwright() as playwright:
+            options = {
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--lang=zh-CN',
+                    '--disable-infobars',
+                    '--start-fullscreen',
+                    '--no-sandbox',
+                    '--disable-web-security'
+                ],
+                'headless': False,  # Set headless option here
+                'executable_path': local_executable_path,
+                'proxy':proxy_setting
+            }
+            # Make sure to run headed.
+            browser = await playwright.chromium.launch(**options)
+            return await get_weidaren_cookie_br(account_file, browser)
+
+
+async def weidaren_click_publish_and_save(page, context, account_file):
+    """微达人点击发视频按钮，跳转到发布页面并保存cookie
+    
+    这个函数被以下场景复用：
+    1. 首次登录后保存cookie
+    2. 重登时store在线但channels离线，需要刷新cookie
+    """
+    # 等待页面加载，确认有"邀约"字样
+    await page.wait_for_selector('text=邀约', timeout=10000)
+    tencent_logger.info("[微达人] 已进入微达人页面")
+    
+    # 点击"发视频"按钮
+    await page.click('text=发视频')
+    tencent_logger.info("[微达人] 已点击发视频按钮，等待跳转...")
+    
+    # 等待新标签页打开并跳转到发布页面
+    async with page.expect_popup() as popup_info:
+        pass
+    new_page = await popup_info.value
+    
+    # 等待跳转到发布页面
+    await new_page.wait_for_url("https://channels.weixin.qq.com/platform/post/create*", timeout=30000)
+    tencent_logger.info("[微达人] 已跳转到发布页面")
+
+    await new_page.wait_for_selector('span:has-text("内容管理")', timeout=10000)  # 等待5秒
+    # 再跳转到平台首页
+    await new_page.goto("https://channels.weixin.qq.com/platform")
+    tencent_logger.info("[微达人] 已跳转到平台首页")
+    
+    # 获取用户信息
+    user_id = await get_user_id(new_page)
+    user_name = await new_page.locator('.finder-nickname').text_content()
+    logger.info(f'{user_id}---{user_name}')
+    
+    # 保存cookie
+    await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
+    tencent_logger.success("[微达人] cookie已保存")
+    
+    # 关闭新标签页
+    await new_page.close()
+    
+    return user_id, user_name
+
+
+async def get_weidaren_cookie_br(account_file, browser):
+    """获取微达人cookie - 浏览器模式"""
+    # Setup context however you like.
+    context = await browser.new_context()  # Pass any options
+    # Pause the page, and start recording manually.
+    context = await set_init_script(context, os.path.basename(account_file))
+    page = await context.new_page()
+    await page.goto("https://store.weixin.qq.com/talent/?redirect_url=%2Fchannel%2Ffinder")
+    try:
+        # 设置页面标题为 local_executable_path 的文件名
+        if account_file:
+            file_name = os.path.basename(account_file)
+            await page.evaluate(f'document.title = "{file_name}"')
+    except:
+        pass
+    
+    # 等待登录成功，检查是否有"邀约"字样
+    start_time = time.time()
+    while True:
+        try:
+            await page.wait_for_selector('text=邀约', timeout=1000)
+            # 出现邀约，登录成功
+            break
+        except:
+            # 检查是否超时
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 1200:
+                raise TimeoutError("等待登录超时，跳出循环")
+            await asyncio.sleep(0.5)
+    
+    tencent_logger.info("[微达人] 登录成功，检测到邀约字样")
+    
+    # 复用点击发视频和保存cookie的逻辑
+    user_id, user_name = await weidaren_click_publish_and_save(page, context, account_file)
+    
+    return user_id, user_name
+
+
+async def weidaren_setup(account_file, handle=False, local_executable_path=None, proxy_setting=None, camoufox=False, addons_path=None):
+    """微达人登录设置"""
+    # 第一步：检查 channels.weixin.qq.com 是否在线
+    if os.path.exists(account_file):
+        tencent_logger.info(f'[微达人登录] 检查 channels.weixin.qq.com 是否在线...')
+        is_channels_online = await cookie_auth(account_file,
+                                               local_executable_path=local_executable_path,
+                                               proxy_setting=proxy_setting,
+                                               camoufox=camoufox,
+                                               addons_path=addons_path)
+        if is_channels_online:
+            tencent_logger.success(f'[微达人登录] channels.weixin.qq.com 在线，登录成功')
+            # 从文件名中提取用户信息
+            base_name = os.path.basename(account_file)
+            user_id, user_name = base_name.split('_')[:2]
+            return True, user_id, user_name
+        
+        # 第二步：检查 store.weixin.qq.com 是否在线
+        tencent_logger.info(f'[微达人登录] channels.weixin.qq.com 离线，检查 store.weixin.qq.com 是否在线...')
+        is_store_online = await weidaren_cookie_auth(account_file,
+                                                     local_executable_path=local_executable_path,
+                                                     proxy_setting=proxy_setting,
+                                                     camoufox=camoufox,
+                                                     addons_path=addons_path)
+        if is_store_online:
+            tencent_logger.success(f'[微达人登录] store.weixin.qq.com 在线，执行登录后逻辑...')
+            # 执行登录后的逻辑：点击发视频，跳转到发布页面，保存cookie（隐藏窗口）
+            if camoufox:
+                camoufox_config = await _get_camoufox_config(SimpleNamespace(info={'addons_path':addons_path},account_file=account_file,hide_browser=True,proxy_setting=proxy_setting))
+                async with AsyncCamoufox(**camoufox_config) as browser:
+                    return await weidaren_post_login(account_file, browser)
+            else:
+                async with async_playwright() as playwright:
+                    options = {
+                        'args': [
+                            '--disable-blink-features=AutomationControlled',
+                            '--lang=zh-CN',
+                            '--disable-infobars',
+                            '--start-fullscreen',
+                            '--no-sandbox',
+                            '--disable-web-security'
+                        ],
+                        'headless': True,  # 隐藏窗口
+                        'executable_path': local_executable_path,
+                        'proxy':proxy_setting
+                    }
+                    browser = await playwright.chromium.launch(**options)
+                    return await weidaren_post_login(account_file, browser)
+    
+    # 第三步：完全离线，需要重新登录
+    if not handle:
+        return False, None, None
+    
+    tencent_logger.info(f'[微达人登录] {account_file} cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
+    user_id, user_name = await get_weidaren_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
+    return True, user_id, user_name
+
+
+async def weidaren_post_login(account_file, browser):
+    """微达人登录后的逻辑：点击发视频，跳转到发布页面，保存cookie"""
+    context = await browser.new_context(storage_state=account_file)
+    context = await set_init_script(context, os.path.basename(account_file))
+    page = await context.new_page()
+    
+    try:
+        # 访问微达人页面
+        await page.goto("https://store.weixin.qq.com/talent/channel/finder")
+        
+        # 复用点击发视频和保存cookie的逻辑
+        user_id, user_name = await weidaren_click_publish_and_save(page, context, account_file)
+        
+        # 关闭页面和浏览器
+        await page.close()
+        await context.close()
+        await browser.close()
+        
+        return True, user_id, user_name
+        
+    except Exception as e:
+        tencent_logger.error(f"[微达人] 登录后逻辑执行失败: {str(e)}")
+        try:
+            await context.close()
+            await browser.close()
+        except:
+            pass
+        raise
+        tencent_logger.error(f"[微达人] 登录后逻辑执行失败: {str(e)}")
+        try:
+            await context.close()
+            await browser.close()
+        except:
+            pass
+        raise
+
+
 class TencentVideo(object):
     def __init__(self, title, file_path, tags, publish_date: datetime, account_file, category=None,
                  local_executable_path=None, info=None, collection=None, declare_original=None, proxy_setting=None, hide_browser=False, thumbnail_path=None):
@@ -310,6 +647,28 @@ class TencentVideo(object):
         self.upload_retry_attempts = 0
         self.max_upload_retries = 3
         self.thumbnail_path = thumbnail_path
+
+    async def _check_is_weidaren_login(self) -> bool:
+        """检查是否为微达人登录方式
+        通过检查cookie文件中是否包含store.weixin.qq.com域名的cookie来判断
+        """
+        try:
+            if not os.path.exists(self.account_file):
+                return False
+            
+            with open(self.account_file, 'r', encoding='utf-8') as f:
+                cookie_data = json.load(f)
+            
+            # 检查cookies数组
+            cookies = cookie_data.get('cookies', [])
+            for cookie in cookies:
+                if 'store.weixin.qq.com' in cookie.get('domain', ''):
+                    return True
+            
+            return False
+        except Exception as e:
+            tencent_logger.error(f"判断微达人登录方式失败: {e}")
+            return False
 
     async def set_schedule_time_tencent(self, page, publish_date):
         label_element = page.locator("label").filter(has_text="定时").nth(1)
@@ -511,8 +870,37 @@ class TencentVideo(object):
             # 访问指定的 URL
             await page.goto("https://channels.weixin.qq.com/platform/post/create")
             tencent_logger.info(f' [视频号上传] {self.file_path} 正在上传-------{self.title}.mp4')
-            # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
-            await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
+            
+            # 检查是否需要重新登录（微达人方式）
+            try:
+                # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
+                await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create", timeout=10000)
+            except:
+                # 如果跳转失败，可能是掉线了，检查是否为微达人登录方式
+                is_weidaren = await self._check_is_weidaren_login()
+                if is_weidaren:
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 检测到微达人登录已掉线，尝试重新登录...')
+                    # 跳转到微达人页面
+                    await page.goto("https://store.weixin.qq.com/talent/channel/finder")
+                    # 等待页面加载
+                    await page.wait_for_selector('text=邀约', timeout=10000)
+                    # 点击"发视频"按钮
+                    await page.click('text=发视频')
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 已点击发视频按钮，等待跳转...')
+                    # 等待新标签页打开
+                    async with page.expect_popup() as popup_info:
+                        pass
+                    new_page = await popup_info.value
+                    # 等待跳转到发布页面
+                    await new_page.wait_for_url("https://channels.weixin.qq.com/platform/post/create*", timeout=30000)
+                    tencent_logger.info(f'  [视频号上传] {self.file_path} 已重新进入发布页面')
+                    # 关闭旧页面，使用新页面
+                    await page.close()
+                    page = new_page
+                else:
+                    # 不是微达人登录方式，抛出异常
+                    raise
+            
             # await page.wait_for_selector('input[type="file"]', timeout=10000)
             file_input = page.locator(pub_config.get('up_file'))
             await file_input.set_input_files(self.file_path)
