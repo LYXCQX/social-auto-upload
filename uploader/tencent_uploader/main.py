@@ -620,13 +620,72 @@ async def weidaren_post_login(account_file, browser):
         except:
             pass
         raise
-        tencent_logger.error(f"[微达人] 登录后逻辑执行失败: {str(e)}")
-        try:
-            await context.close()
+
+
+async def weidaren_refresh_backend(account_file, local_executable_path=None, proxy_setting=None, camoufox=False, addons_path=None):
+    """刷新微达人后台并保存cookie
+    
+    用于后台校验时，如果微达人账号在线，则打开新tab刷新后台并保存cookie
+    """
+    hide_browser = True
+    if camoufox:
+        camoufox_config = await _get_camoufox_config(
+            SimpleNamespace(
+                info={'addons_path': None},
+                account_file=account_file,
+                hide_browser=hide_browser,
+                proxy_setting=proxy_setting
+            )
+        )
+        async with AsyncCamoufox(**camoufox_config) as browser:
+            await weidaren_refresh_backend_br(account_file, browser)
+    else:
+        async with async_playwright() as playwright:
+            options = {
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--lang=zh-CN',
+                    '--disable-infobars',
+                    '--start-fullscreen',
+                    '--no-sandbox',
+                    '--disable-web-security'
+                ],
+                'headless': hide_browser,
+                'executable_path': local_executable_path,
+                'proxy': proxy_setting
+            }
+            browser = await playwright.chromium.launch(**options)
+            await weidaren_refresh_backend_br(account_file, browser)
             await browser.close()
-        except:
-            pass
-        raise
+
+
+async def weidaren_refresh_backend_br(account_file, browser):
+    """刷新微达人后台 - 浏览器模式"""
+    context = await browser.new_context(storage_state=account_file)
+    context = await set_init_script(context, os.path.basename(account_file))
+    
+    try:
+        # 创建一个新的页面
+        page = await context.new_page()
+        
+        # 访问微达人后台
+        tencent_logger.info("[微达人] 正在访问微达人后台...")
+        await page.goto("https://store.weixin.qq.com/talent/channel/finder", timeout=30000)
+        
+        # 等待页面加载完成
+        await page.wait_for_load_state('networkidle', timeout=10000)
+        tencent_logger.info("[微达人] 后台页面加载完成")
+        
+        # 关闭页面
+        await page.close()
+        
+        # 保存更新后的cookie
+        tencent_logger.info(f"[微达人] 正在保存更新后的cookie到: {account_file}")
+        await context.storage_state(path=account_file)
+        tencent_logger.success("[微达人] cookie已更新并保存")
+        
+    finally:
+        await context.close()
 
 
 class TencentVideo(object):
