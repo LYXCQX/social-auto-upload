@@ -1040,8 +1040,18 @@ class TencentVideo(object):
             if self.info and self.info.get("auto_comment_enabled", False) and self.info.get("auto_comment_text", None) :
                 await add_comment(page,self.info.get("auto_comment_text", None))
         if self.info and self.info.get("delete_after_play", False):
-            await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=50)
-            # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
+            # 检查是否使用API删除
+            if self.info.get("delete_use_api", False):
+                tencent_logger.info("[删除流程] 使用API接口删除视频")
+                await self.delete_videos_by_api(
+                    minutes_ago=self.info.get("delete_time_threshold", 1440), 
+                    max_views=self.info.get("delete_play_threshold", 100))
+            else:
+                tencent_logger.info("[删除流程] 使用页面操作删除视频")
+                await delete_videos_by_conditions(page, 
+                    minutes_ago=self.info.get("delete_time_threshold", 1440), 
+                    max_views=self.info.get("delete_play_threshold", 100),
+                    page_index=50)
         
         # 检查并处理违规视频
         if self.info and self.info.get("delete_violation", False):
@@ -1200,6 +1210,164 @@ class TencentVideo(object):
 
             except Exception as e:
                 tencent_logger.exception(f"  [视频号上传] {self.file_path} [删除流程] 删除视频时出错：{str(e)}")
+
+    async def delete_videos_by_api(self, minutes_ago=None, max_views=None):
+        """
+        使用API接口根据时间间隔和播放量条件删除视频
+        :param minutes_ago: 多少分钟之前的视频
+        :param max_views: 最大播放量
+        """
+        import requests
+        import json
+        from datetime import datetime, timedelta
+        
+        if not minutes_ago and not max_views:
+            tencent_logger.info("[删除流程-API] 未设置删除条件，跳过删除")
+            return
+        
+        tencent_logger.info(f"[删除流程-API] 开始使用API删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views}")
+        
+        try:
+            # 从session文件读取cookie
+            with open(self.account_file, 'r', encoding='utf-8') as f:
+                session_data = json.load(f)
+            
+            cookies_list = session_data.get('cookies', [])
+            sessionid = None
+            wxuin = None
+            for cookie in cookies_list:
+                if cookie['name'] == 'sessionid':
+                    sessionid = cookie['value']
+                elif cookie['name'] == 'wxuin':
+                    wxuin = cookie['value']
+            
+            if not sessionid or not wxuin:
+                tencent_logger.error('[删除流程-API] 无法获取sessionid或wxuin')
+                return
+            
+            # 导入删除函数
+            from social_auto_upload.uploader.tencent_uploader.main_tz_violation import delete_violation_video
+            
+            # 计算时间范围（与页面操作逻辑一致：获取 minutes_ago 分钟前的时间点）
+            current_time = datetime.now()
+            cutoff_time = current_time - timedelta(minutes=minutes_ago)
+            cutoff_timestamp = int(cutoff_time.timestamp())
+            
+            tencent_logger.info(f"[删除流程-API] 当前时间: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            tencent_logger.info(f"[删除流程-API] 截止时间: {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} (时间戳: {cutoff_timestamp})")
+            tencent_logger.info(f"[删除流程-API] 删除条件: 发布时间 <= {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} 且 播放量 < {max_views}")
+            
+            # 查询视频列表
+            url = 'https://channels.weixin.qq.com/micro/statistic/cgi-bin/mmfinderassistant-bin/statistic/post_list'
+            
+            headers = {
+                'Accept': 'application/json, text/plain, */*',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'X-WECHAT-UIN': wxuin
+            }
+            
+            cookies = {'sessionid': sessionid, 'wxuin': wxuin}
+            
+            session = requests.Session()
+            
+            # 分页查询视频
+            page_size = 50
+            current_page = 1
+            delete_success_count = 0
+            delete_fail_count = 0
+            
+            while True:
+                data = {
+                    'pageSize': page_size,
+                    'currentPage': current_page,
+                    'sort': 0,
+                    'order': 0,
+                    'timestamp': str(int(time.time() * 1000)),
+                    '_log_finder_uin': '',
+                    '_log_finder_id': '',
+                    'rawKeyBuff': None,
+                    'pluginSessionId': None,
+                    'scene': 7,
+                    'reqScene': 7
+                }
+                
+                response = session.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
+                
+                if response.status_code not in [200, 201]:
+                    tencent_logger.error(f"[删除流程-API] 查询视频列表失败（第{current_page}页），状态码：{response.status_code}")
+                    break
+                
+                result = response.json()
+                
+                if result.get('errCode') != 0:
+                    tencent_logger.error(f"[删除流程-API] 视频列表API返回错误：{result.get('errMsg')}")
+                    break
+                
+                data_obj = result.get('data', {})
+                video_list = data_obj.get('list', [])
+                total_count = data_obj.get('totalCount', 0)
+                
+                if not video_list:
+                    tencent_logger.info(f"[删除流程-API] 第{current_page}页无数据，查询完成")
+                    break
+                
+                tencent_logger.info(f"[删除流程-API] 第{current_page}页: 获取 {len(video_list)} 个视频")
+                
+                # 检查符合条件的视频并立即删除
+                should_continue = False
+                for video in video_list:
+                    create_time = video.get('createTime', 0)
+                    read_count = video.get('readCount', 0)
+                    export_id = video.get('exportId', '')
+                    object_id = video.get('objectId', '')
+                    
+                    # 计算时间差（分钟）
+                    video_time = datetime.fromtimestamp(create_time)
+                    time_diff = (current_time - video_time).total_seconds() / 60
+                    
+                    # 记录详细的比对信息
+                    tencent_logger.info(f"[删除流程-API] 视频信息比对:")
+                    tencent_logger.info(f"[删除流程-API] - ObjectID: {object_id}")
+                    tencent_logger.info(f"[删除流程-API] - 发布时间: {video_time.strftime('%Y年%m月%d日 %H:%M')} ({time_diff:.0f}分钟前)")
+                    tencent_logger.info(f"[删除流程-API] - 播放量: {read_count}")
+                    tencent_logger.info(f"[删除流程-API] - 条件比对: 时间>={minutes_ago}分钟 且 播放量<{max_views}")
+                    tencent_logger.info(f"[删除流程-API] - 实际数据: {time_diff:.0f}>={minutes_ago} 且 {read_count}<{max_views}")
+                    
+                    # 检查是否符合删除条件（与页面操作逻辑一致）
+                    if minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and read_count < max_views:
+                        tencent_logger.info(f"[删除流程-API] => 符合删除条件，立即删除")
+                        
+                        # 立即执行删除
+                        success = await delete_violation_video(export_id, self.account_file, sessionid, wxuin)
+                        if success:
+                            delete_success_count += 1
+                            tencent_logger.info(f"[删除流程-API] ✅ 删除成功 (已删除: {delete_success_count})")
+                        else:
+                            delete_fail_count += 1
+                            tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count})")
+                        
+                        time.sleep(1)  # 避免请求过快
+                        should_continue = True
+                    else:
+                        tencent_logger.info(f"[删除流程-API] => 不符合删除条件")
+                
+                # 如果没有找到符合条件的视频且已检查完本页，检查是否需要翻页
+                if not should_continue and len(video_list) >= page_size:
+                    # 继续翻页查找
+                    pass
+                elif len(video_list) < page_size:
+                    # 已到最后一页
+                    tencent_logger.info(f"[删除流程-API] 已到最后一页，处理完成")
+                    break
+                
+                current_page += 1
+                time.sleep(0.5)
+            
+            tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
+            
+        except Exception as e:
+            tencent_logger.exception(f"[删除流程-API] 删除视频时出错：{str(e)}")
 
     async def add_short_play_by_baobai(self, page,idx=1,need_click =True):
         # 等待并点击"选择链接"按钮
