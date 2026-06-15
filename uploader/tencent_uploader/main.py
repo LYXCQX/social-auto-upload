@@ -1042,6 +1042,25 @@ class TencentVideo(object):
         if self.info and self.info.get("delete_after_play", False):
             await delete_videos_by_conditions(page, minutes_ago=self.info.get("delete_time_threshold", 1440), max_views=self.info.get("delete_play_threshold", 100),page_index=50)
             # await delete_videos_by_conditions(page, minutes_ago=180, max_views=100)
+        
+        # 检查并处理违规视频
+        if self.info and self.info.get("delete_violation", False):
+            try:
+                # 使用当前时间作为发布时间戳
+                publish_timestamp = int(time.time())
+                violation_delete_days = self.info.get("violation_delete_days", 7)
+                violation_delete_views = self.info.get("violation_delete_views", 100)
+                violation_hide_views = self.info.get("violation_hide_views", 1000)
+                
+                from .main_tz_violation import check_and_handle_violation
+                await check_and_handle_violation(
+                    self.account_file,  # 传递session文件路径
+                    violation_delete_days,
+                    violation_delete_views,
+                    violation_hide_views
+                )
+            except Exception as e:
+                tencent_logger.exception(f"检查违规视频时出错: {str(e)}")
 
 
         # 关闭浏览器上下文和浏览器实例
