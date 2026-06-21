@@ -244,10 +244,55 @@ async def get_tencent_cookie_br(account_file, browser):
             raise TimeoutError("操作超时，跳出循环")
     user_id = await get_user_id(page)
     user_name = await page.locator('.finder-nickname').text_content()
+    
+    # 获取头像和粉丝数
+    avatar_url = None
+    fans_count = 0
+    video_count = 0
+    
+    try:
+        # 获取头像：finder-info-container 下的 img 标签的 src
+        avatar_element = page.locator('.finder-info-container img').first
+        if avatar_element:
+            avatar_url = await avatar_element.get_attribute('src')
+            tencent_logger.info(f'[视频号登录] 获取到头像URL: {avatar_url}')
+    except Exception as e:
+        tencent_logger.warning(f'[视频号登录] 获取头像失败: {e}')
+    
+    try:
+        # 获取视频数和粉丝数：finder-content-info 下的 finder-info-num
+        info_nums = await page.locator('.finder-content-info .finder-info-num').all_text_contents()
+        if len(info_nums) >= 2:
+            video_count_str = info_nums[0].strip()
+            fans_count_str = info_nums[1].strip()
+            
+            # 转换为数字（可能包含万、亿等单位）
+            video_count = parse_count_string(video_count_str)
+            fans_count = parse_count_string(fans_count_str)
+            
+            tencent_logger.info(f'[视频号登录] 视频数: {video_count}, 粉丝数: {fans_count}')
+    except Exception as e:
+        tencent_logger.warning(f'[视频号登录] 获取粉丝数失败: {e}')
+    
     logger.info(f'{user_id}---{user_name}')
     # 点击调试器的继续，保存cookie
     await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
-    return user_id, user_name
+    
+    return user_id, user_name, avatar_url, fans_count, video_count
+
+
+def parse_count_string(count_str):
+    """解析数量字符串，支持万、亿等单位"""
+    try:
+        count_str = count_str.strip()
+        if '亿' in count_str:
+            return int(float(count_str.replace('亿', '')) * 100000000)
+        elif '万' in count_str:
+            return int(float(count_str.replace('万', '')) * 10000)
+        else:
+            return int(count_str)
+    except:
+        return 0
 
 
 async def get_user_id(page):
@@ -282,14 +327,15 @@ async def weixin_setup(account_file, handle=False, local_executable_path=None,pr
                                                                  local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path):
         if not handle:
             # Todo alert message
-            return False, None, None
+            return False, None, None, None, 0, 0
         tencent_logger.info(f'[视频号登录] {account_file} cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-        user_id, user_name = await get_tencent_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
+        user_id, user_name, avatar_url, fans_count, video_count = await get_tencent_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
+        return True, user_id, user_name, avatar_url, fans_count, video_count
     else:
         # 新增：从 account_file 的文件名中提取用户 id 和 name
         base_name = os.path.basename(account_file)
         user_id, user_name = base_name.split('_')[:2]  # 假设文件名格式为 "user_id_user_name_account.json"
-    return True, user_id, user_name
+        return True, user_id, user_name, None, 0, 0
 
 
 async def weidaren_cookie_auth(account_file, local_executable_path=None, un_close=False, proxy_setting=None, camoufox=False, addons_path=None, load_addons=False):
