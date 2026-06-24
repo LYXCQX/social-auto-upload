@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import hashlib
 import json
 import os
 import random
@@ -1088,7 +1089,11 @@ class TencentVideo(object):
                 await add_comment(page,self.info.get("auto_comment_text", None))
         if self.info and self.info.get("delete_after_play", False):
             # 检查是否使用API删除
-            if self.info.get("delete_use_api", False):
+            delete_use_api = self.info.get("delete_use_api", False)
+            tencent_logger.info(f"[删除流程] delete_use_api配置值: {delete_use_api} (类型: {type(delete_use_api)})")
+            tencent_logger.info(f"[删除流程] self.info完整内容: {self.info}")
+
+            if delete_use_api:
                 tencent_logger.info("[删除流程] 使用API接口删除视频")
                 await self.delete_videos_by_api(
                     minutes_ago=self.info.get("delete_time_threshold", 1440), 
@@ -1296,29 +1301,43 @@ class TencentVideo(object):
             
             # 计算时间范围（与页面操作逻辑一致：获取 minutes_ago 分钟前的时间点）
             current_time = datetime.now()
-            cutoff_time = current_time - timedelta(minutes=minutes_ago)
-            cutoff_timestamp = int(cutoff_time.timestamp())
-            
+            cutoff_time = current_time - timedelta(days=3)
+            cutoff_timestamp = int(cutoff_time.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+
             tencent_logger.info(f"[删除流程-API] 当前时间: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
             tencent_logger.info(f"[删除流程-API] 截止时间: {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} (时间戳: {cutoff_timestamp})")
             tencent_logger.info(f"[删除流程-API] 删除条件: 发布时间 <= {cutoff_time.strftime('%Y-%m-%d %H:%M:%S')} 且 播放量 < {max_views}")
             
             # 查询视频列表
             url = 'https://channels.weixin.qq.com/micro/statistic/cgi-bin/mmfinderassistant-bin/statistic/post_list'
-            
+
             headers = {
-                'Accept': 'application/json, text/plain, */*',
+                'Accept': '*/*',
+                'Accept-Language': 'zh-CN,zh;q=0.9',
+                'Connection': 'keep-alive',
                 'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'X-WECHAT-UIN': wxuin
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36',
+                'X-WECHAT-UIN': wxuin,
+                'Referer': 'https://channels.weixin.qq.com/micro/statistic/post',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin',
+                'finger-print-device-id': hashlib.md5(sessionid.encode()).hexdigest(),
+                'sec-ch-ua': '"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"'
             }
             
             cookies = {'sessionid': sessionid, 'wxuin': wxuin}
-            
+            # 禁用SSL警告
+            import warnings
+            from urllib3.exceptions import InsecureRequestWarning
+            warnings.filterwarnings('ignore', category=InsecureRequestWarning)
+
             session = requests.Session()
-            
+
             # 分页查询视频
-            page_size = 50
+            page_size = 20
             current_page = 1
             delete_success_count = 0
             delete_fail_count = 0
@@ -1327,17 +1346,19 @@ class TencentVideo(object):
                 data = {
                     'pageSize': page_size,
                     'currentPage': current_page,
-                    'sort': 0,
-                    'order': 0,
+                    'sort': 0,  # 使用当前排序字段
+                    'order': 0,  # 使用当前排序方向
+                    'startTime': cutoff_timestamp,
+                    'endTime': int(current_time.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()),
                     'timestamp': str(int(time.time() * 1000)),
                     '_log_finder_uin': '',
                     '_log_finder_id': '',
-                    'rawKeyBuff': None,
+                    'rawKeyBuff': '',
                     'pluginSessionId': None,
                     'scene': 7,
                     'reqScene': 7
                 }
-                
+                print(data)
                 response = session.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
                 
                 if response.status_code not in [200, 201]:
