@@ -15,6 +15,7 @@ from config_manager import ConfigManager
 from patchright.async_api import Playwright, async_playwright
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.uploader.tencent_uploader.main_tz import delete_videos_by_conditions
+from social_auto_upload.uploader.tencent_uploader.main_tz_violation import check_and_handle_violation
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TENCENT
 from social_auto_upload.utils.bus_exception import UpdateError
 from social_auto_upload.utils.file_util import get_account_file
@@ -1108,7 +1109,6 @@ class TencentVideo(object):
                 violation_delete_views = self.info.get("violation_delete_views", 100)
                 violation_hide_views = self.info.get("violation_hide_views", 1000)
                 
-                from .main_tz_violation import check_and_handle_violation
                 await check_and_handle_violation(
                     self.account_file,  # 传递session文件路径
                     violation_delete_days,
