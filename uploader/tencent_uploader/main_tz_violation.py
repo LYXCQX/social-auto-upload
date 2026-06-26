@@ -80,8 +80,8 @@ def collect_violation_videos(notification_list):
     return violation_videos
 
 
-def get_post_list_by_date_with_early_stop(session, headers, cookies, start_time, end_time, violation_videos, page_size=50):
-    """根据日期范围查询视频列表（支持翻页，找到所有违规视频后提前停止）"""
+async def get_post_list_by_date_with_early_stop_async(session, headers, cookies, start_time, end_time, violation_videos, page_size=50):
+    """根据日期范围查询视频列表（支持翻页，找到所有违规视频后提前停止） - 异步版本"""
     url = 'https://channels.weixin.qq.com/micro/statistic/cgi-bin/mmfinderassistant-bin/statistic/post_list'
     
     all_videos = []
@@ -121,54 +121,53 @@ def get_post_list_by_date_with_early_stop(session, headers, cookies, start_time,
         }
         
         try:
-            response = session.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
-            
-            if response.status_code not in [200, 201]:
-                tencent_logger.error(f"[违规处理] 查询视频列表失败（第{current_page}页），状态码：{response.status_code}")
-                break
-            
-            result = response.json()
-            
-            if result.get('errCode') != 0:
-                tencent_logger.error(f"[违规处理] 视频列表API返回错误：{result.get('errMsg')}")
-                break
-            
-            data_obj = result.get('data', {})
-            video_list = data_obj.get('list', [])
-            total_count = data_obj.get('totalCount', 0)
-            
-            if not video_list:
-                tencent_logger.info(f"[违规处理] 第{current_page}页无数据，查询完成")
-                break
-            
-            all_videos.extend(video_list)
-            
-            # 检查当前页是否匹配到了目标视频
-            page_matched = 0
-            for video in video_list:
-                object_id = video.get('objectId', '')
-                create_time = video.get('createTime', 0)
+            async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
+                if response.status not in [200, 201]:
+                    tencent_logger.error(f"[违规处理] 查询视频列表失败（第{current_page}页），状态码：{response.status}")
+                    break
                 
-                if object_id in target_object_ids or create_time in target_timestamps:
-                    page_matched += 1
-            
-            matched_count += page_matched
-            
-            tencent_logger.info(f"[违规处理] 第{current_page}页: 获取 {len(video_list)} 个视频，本页匹配 {page_matched} 个 (累计匹配: {matched_count}/{len(violation_videos)}，总获取: {len(all_videos)}/{total_count})")
-            
-            # 如果已经找到所有违规视频，提前结束
-            if matched_count >= len(violation_videos):
-                tencent_logger.info(f"[违规处理] ✅ 已找到所有 {len(violation_videos)} 个违规视频，提前结束查询！")
-                break
-            
-            # 如果已获取所有数据，结束循环
-            if len(all_videos) >= total_count:
-                tencent_logger.info(f"[违规处理] 已获取所有视频数据")
-                break
-            
-            current_page += 1
-            time.sleep(0.5)  # 避免请求过快
-            
+                result = await response.json()
+                
+                if result.get('errCode') != 0:
+                    tencent_logger.error(f"[违规处理] 视频列表API返回错误：{result.get('errMsg')}")
+                    break
+                
+                data_obj = result.get('data', {})
+                video_list = data_obj.get('list', [])
+                total_count = data_obj.get('totalCount', 0)
+                
+                if not video_list:
+                    tencent_logger.info(f"[违规处理] 第{current_page}页无数据，查询完成")
+                    break
+                
+                all_videos.extend(video_list)
+                
+                # 检查当前页是否匹配到了目标视频
+                page_matched = 0
+                for video in video_list:
+                    object_id = video.get('objectId', '')
+                    create_time = video.get('createTime', 0)
+                    
+                    if object_id in target_object_ids or create_time in target_timestamps:
+                        page_matched += 1
+                
+                matched_count += page_matched
+                
+                tencent_logger.info(f"[违规处理] 第{current_page}页: 获取 {len(video_list)} 个视频，本页匹配 {page_matched} 个 (累计匹配: {matched_count}/{len(violation_videos)}，总获取: {len(all_videos)}/{total_count})")
+                
+                # 如果已经找到所有违规视频，提前结束
+                if matched_count >= len(violation_videos):
+                    tencent_logger.info(f"[违规处理] ✅ 已找到所有 {len(violation_videos)} 个违规视频，提前结束查询！")
+                    break
+                
+                # 如果已获取所有数据，结束循环
+                if len(all_videos) >= total_count:
+                    tencent_logger.info(f"[违规处理] 已获取所有视频数据")
+                    break
+                
+                current_page += 1
+                await asyncio.sleep(0.5)  # 避免请求过快
+                
         except Exception as e:
             tencent_logger.error(f"[违规处理] 查询视频列表出错（第{current_page}页）：{str(e)}")
             break
@@ -176,8 +175,8 @@ def get_post_list_by_date_with_early_stop(session, headers, cookies, start_time,
     return all_videos
 
 
-def find_videos_by_object_id_and_time(session, headers, cookies, violation_videos):
-    """根据所有违规视频的时间范围，一次性查询所有视频并匹配"""
+async def find_videos_by_object_id_and_time_async(session, headers, cookies, violation_videos):
+    """根据所有违规视频的时间范围，一次性查询所有视频并匹配 - 异步版本"""
     from datetime import timedelta
     
     if not violation_videos:
@@ -212,7 +211,7 @@ def find_videos_by_object_id_and_time(session, headers, cookies, violation_video
     tencent_logger.info(f"[违规处理]    时间戳范围: {start_time} ~ {end_time}")
     
     # 查询所有视频（自动翻页，找到所有违规视频后提前停止）
-    all_videos = get_post_list_by_date_with_early_stop(session, headers, cookies, start_time, end_time, violation_videos)
+    all_videos = await get_post_list_by_date_with_early_stop_async(session, headers, cookies, start_time, end_time, violation_videos)
     
     if not all_videos:
         tencent_logger.warning(f"[违规处理] 未查询到任何视频")
@@ -277,12 +276,10 @@ def find_videos_by_object_id_and_time(session, headers, cookies, violation_video
     tencent_logger.info(f"[违规处理]    - 通过时间戳匹配: {matched_by_timestamp} 个")
     
     return matched_videos
-
-
 async def delete_violation_video(object_id, account_file=None, sessionid=None, wxuin=None):
-    """删除指定的违规视频"""
-    import requests
+    """删除指定的违规视频 - 使用异步HTTP请求"""
     import json
+    import aiohttp
     
     try:
         tencent_logger.info("=" * 80)
@@ -296,8 +293,11 @@ async def delete_violation_video(object_id, account_file=None, sessionid=None, w
                 return False
             
             tencent_logger.info(f"[违规处理-删除] 从session文件读取cookie: {account_file}")
-            with open(account_file, 'r', encoding='utf-8') as f:
-                session_data = json.load(f)
+            # ✅ 使用异步文件读取
+            import aiofiles
+            async with aiofiles.open(account_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                session_data = json.loads(content)
             
             cookies_list = session_data.get('cookies', [])
             for cookie in cookies_list:
@@ -344,32 +344,36 @@ async def delete_violation_video(object_id, account_file=None, sessionid=None, w
         tencent_logger.info(f"[违规处理-删除] 请求Body: {json.dumps(data, ensure_ascii=False, indent=2)}")
         
         tencent_logger.info(f"[违规处理-删除] 正在发送删除请求...")
-        response = requests.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
-        
-        # 打印响应参数
-        tencent_logger.info(f"[违规处理-删除] 响应状态码: {response.status_code}")
-        tencent_logger.info(f"[违规处理-删除] 响应Headers: {json.dumps(dict(response.headers), ensure_ascii=False, indent=2)}")
-        
-        try:
-            response_json = response.json()
-            tencent_logger.info(f"[违规处理-删除] 响应Body: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
-        except:
-            tencent_logger.warning(f"[违规处理-删除] 响应Body (非JSON): {response.text[:500]}")
-        
-        if response.status_code in [200, 201]:
-            result = response.json()
-            if result.get('errCode') == 0:
-                tencent_logger.info(f"[违规处理-删除] ✅ 视频删除成功: {object_id}")
-                tencent_logger.info("=" * 80)
-                return True
-            else:
-                tencent_logger.error(f"[违规处理-删除] ❌ 删除失败 - errCode: {result.get('errCode')}, errMsg: {result.get('errMsg')}")
-                tencent_logger.info("=" * 80)
-                return False
-        else:
-            tencent_logger.error(f"[违规处理-删除] ❌ 删除请求失败，状态码: {response.status_code}")
-            tencent_logger.info("=" * 80)
-            return False
+        # ✅ 使用 aiohttp 进行异步HTTP请求
+        connector = aiohttp.TCPConnector(ssl=False)
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
+                # 打印响应参数
+                tencent_logger.info(f"[违规处理-删除] 响应状态码: {response.status}")
+                tencent_logger.info(f"[违规处理-删除] 响应Headers: {json.dumps(dict(response.headers), ensure_ascii=False, indent=2)}")
+                
+                try:
+                    response_json = await response.json()
+                    tencent_logger.info(f"[违规处理-删除] 响应Body: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
+                except:
+                    response_text = await response.text()
+                    tencent_logger.warning(f"[违规处理-删除] 响应Body (非JSON): {response_text[:500]}")
+                
+                if response.status in [200, 201]:
+                    result = await response.json()
+                    if result.get('errCode') == 0:
+                        tencent_logger.info(f"[违规处理-删除] ✅ 视频删除成功: {object_id}")
+                        tencent_logger.info("=" * 80)
+                        return True
+                    else:
+                        tencent_logger.error(f"[违规处理-删除] ❌ 删除失败 - errCode: {result.get('errCode')}, errMsg: {result.get('errMsg')}")
+                        tencent_logger.info("=" * 80)
+                        return False
+                else:
+                    tencent_logger.error(f"[违规处理-删除] ❌ 删除请求失败，状态码: {response.status}")
+                    tencent_logger.info("=" * 80)
+                    return False
             
     except Exception as e:
         tencent_logger.exception(f"[违规处理-删除] 删除视频异常: {str(e)}")
@@ -378,9 +382,9 @@ async def delete_violation_video(object_id, account_file=None, sessionid=None, w
 
 
 async def hide_violation_video(object_id, account_file=None, sessionid=None, wxuin=None):
-    """隐藏指定的违规视频（设置为仅自己可见）"""
-    import requests
+    """隐藏指定的违规视频（设置为仅自己可见） - 使用异步HTTP请求"""
     import json
+    import aiohttp
     
     try:
         tencent_logger.info("=" * 80)
@@ -394,8 +398,11 @@ async def hide_violation_video(object_id, account_file=None, sessionid=None, wxu
                 return False
             
             tencent_logger.info(f"[违规处理-隐藏] 从session文件读取cookie: {account_file}")
-            with open(account_file, 'r', encoding='utf-8') as f:
-                session_data = json.load(f)
+            # ✅ 使用异步文件读取
+            import aiofiles
+            async with aiofiles.open(account_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                session_data = json.loads(content)
             
             cookies_list = session_data.get('cookies', [])
             for cookie in cookies_list:
@@ -443,32 +450,36 @@ async def hide_violation_video(object_id, account_file=None, sessionid=None, wxu
         tencent_logger.info(f"[违规处理-隐藏] 请求Body: {json.dumps(data, ensure_ascii=False, indent=2)}")
         
         tencent_logger.info(f"[违规处理-隐藏] 正在发送隐藏请求...")
-        response = requests.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
-        
-        # 打印响应参数
-        tencent_logger.info(f"[违规处理-隐藏] 响应状态码: {response.status_code}")
-        tencent_logger.info(f"[违规处理-隐藏] 响应Headers: {json.dumps(dict(response.headers), ensure_ascii=False, indent=2)}")
-        
-        try:
-            response_json = response.json()
-            tencent_logger.info(f"[违规处理-隐藏] 响应Body: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
-        except:
-            tencent_logger.warning(f"[违规处理-隐藏] 响应Body (非JSON): {response.text[:500]}")
-        
-        if response.status_code in [200, 201]:
-            result = response.json()
-            if result.get('errCode') == 0:
-                tencent_logger.info(f"[违规处理-隐藏] ✅ 视频隐藏成功: {object_id}")
-                tencent_logger.info("=" * 80)
-                return True
-            else:
-                tencent_logger.error(f"[违规处理-隐藏] ❌ 隐藏失败 - errCode: {result.get('errCode')}, errMsg: {result.get('errMsg')}")
-                tencent_logger.info("=" * 80)
-                return False
-        else:
-            tencent_logger.error(f"[违规处理-隐藏] ❌ 隐藏请求失败，状态码: {response.status_code}")
-            tencent_logger.info("=" * 80)
-            return False
+        # ✅ 使用 aiohttp 进行异步HTTP请求
+        connector = aiohttp.TCPConnector(ssl=False)
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
+                # 打印响应参数
+                tencent_logger.info(f"[违规处理-隐藏] 响应状态码: {response.status}")
+                tencent_logger.info(f"[违规处理-隐藏] 响应Headers: {json.dumps(dict(response.headers), ensure_ascii=False, indent=2)}")
+                
+                try:
+                    response_json = await response.json()
+                    tencent_logger.info(f"[违规处理-隐藏] 响应Body: {json.dumps(response_json, ensure_ascii=False, indent=2)}")
+                except:
+                    response_text = await response.text()
+                    tencent_logger.warning(f"[违规处理-隐藏] 响应Body (非JSON): {response_text[:500]}")
+                
+                if response.status in [200, 201]:
+                    result = await response.json()
+                    if result.get('errCode') == 0:
+                        tencent_logger.info(f"[违规处理-隐藏] ✅ 视频隐藏成功: {object_id}")
+                        tencent_logger.info("=" * 80)
+                        return True
+                    else:
+                        tencent_logger.error(f"[违规处理-隐藏] ❌ 隐藏失败 - errCode: {result.get('errCode')}, errMsg: {result.get('errMsg')}")
+                        tencent_logger.info("=" * 80)
+                        return False
+                else:
+                    tencent_logger.error(f"[违规处理-隐藏] ❌ 隐藏请求失败，状态码: {response.status}")
+                    tencent_logger.info("=" * 80)
+                    return False
             
     except Exception as e:
         tencent_logger.exception(f"[违规处理-隐藏] 隐藏视频异常: {str(e)}")
@@ -480,9 +491,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                                      violation_hide_views):
     """检查并处理违规视频"""
     import json
-    import requests
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    import aiohttp
     
     tencent_logger.info("=" * 60)
     tencent_logger.info("[违规处理] 开始检查违规视频")
@@ -496,8 +505,11 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         # 从session文件读取cookie
         tencent_logger.info(f"[违规处理] 从session文件读取cookie: {account_file}")
         
-        with open(account_file, 'r', encoding='utf-8') as f:
-            session_data = json.load(f)
+        # ✅ 使用异步文件读取
+        import aiofiles
+        async with aiofiles.open(account_file, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            session_data = json.loads(content)
         
         # 提取cookies
         cookies_list = session_data.get('cookies', [])
@@ -547,130 +559,132 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         
         tencent_logger.info(f"[违规处理] 时间过滤：只处理 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(oldest_allowed_timestamp))} 之后的通知")
         
-        session = requests.Session()
-        response = session.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
-        
-        if response.status_code not in [200, 201]:
-            tencent_logger.error(f'[违规处理] 请求失败，状态码：{response.status_code}')
-            return
-        
-        result = response.json()
-        
-        if result.get('errCode') != 0:
-            tencent_logger.error(f'[违规处理] API返回错误：{result.get("errMsg")}')
-            return
-        
-        # 获取数据
-        data_obj = result.get('data', {})
-        total_count = data_obj.get('totalCount', 0)
-        page_list = data_obj.get('list', [])
-        
-        notification_list = []
-        current_page = 1
-        
-        tencent_logger.info(f"[违规处理] 总通知数：{total_count}")
-        tencent_logger.info(f"[违规处理] 第{current_page}页获取：{len(page_list)} 条")
-        
-        # 检查第一页是否有符合时间范围的通知
-        page_has_valid_notifications = False
-        for notification in page_list:
-            notification_timestamp = notification.get('timestamp', 0)
-            if notification_timestamp >= oldest_allowed_timestamp:
-                notification_list.append(notification)
-                page_has_valid_notifications = True
-        
-        tencent_logger.info(f"[违规处理] 第{current_page}页符合时间范围：{len(notification_list)} 条")
-        
-        # 如果第一页最后一条通知还在时间范围内，继续翻页
-        if page_list:
-            last_notification_timestamp = page_list[-1].get('timestamp', 0)
-            should_continue = last_notification_timestamp >= oldest_allowed_timestamp
-        else:
-            should_continue = False
-        
-        # 继续翻页直到：1) 某页所有通知都超出时间范围 2) 没有更多数据 3) 达到最大页数
-        max_pages = 100  # 最多检查100页
-        
-        while should_continue and current_page < max_pages and len(notification_list) < total_count:
-            current_page += 1
-            data['currentPage'] = current_page
-            data['timestamp'] = str(int(time.time() * 1000))
-            
-            try:
-                response = session.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
+        # ✅ 使用 aiohttp 进行异步HTTP请求
+        connector = aiohttp.TCPConnector(ssl=False)
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
+                if response.status not in [200, 201]:
+                    tencent_logger.error(f'[违规处理] 请求失败，状态码：{response.status}')
+                    return
                 
-                if response.status_code not in [200, 201]:
-                    tencent_logger.warning(f'[违规处理] 第{current_page}页请求失败，状态码：{response.status_code}')
-                    break
-                
-                result = response.json()
+                result = await response.json()
                 
                 if result.get('errCode') != 0:
-                    tencent_logger.warning(f'[违规处理] 第{current_page}页API返回错误：{result.get("errMsg")}')
-                    break
+                    tencent_logger.error(f'[违规处理] API返回错误：{result.get("errMsg")}')
+                    return
                 
-                page_list = result.get('data', {}).get('list', [])
+                # 获取数据
+                data_obj = result.get('data', {})
+                total_count = data_obj.get('totalCount', 0)
+                page_list = data_obj.get('list', [])
                 
-                if not page_list:
-                    tencent_logger.info(f'[违规处理] 第{current_page}页无数据，停止翻页')
-                    break
+                notification_list = []
+                current_page = 1
                 
-                # 统计本页符合时间范围的通知
-                page_valid_count = 0
-                page_oldest_timestamp = float('inf')
+                tencent_logger.info(f"[违规处理] 总通知数：{total_count}")
+                tencent_logger.info(f"[违规处理] 第{current_page}页获取：{len(page_list)} 条")
                 
+                # 检查第一页是否有符合时间范围的通知
+                page_has_valid_notifications = False
                 for notification in page_list:
                     notification_timestamp = notification.get('timestamp', 0)
-                    page_oldest_timestamp = min(page_oldest_timestamp, notification_timestamp)
-                    
                     if notification_timestamp >= oldest_allowed_timestamp:
                         notification_list.append(notification)
-                        page_valid_count += 1
+                        page_has_valid_notifications = True
                 
-                tencent_logger.info(f"[违规处理] 第{current_page}页获取：{len(page_list)} 条，符合时间范围：{page_valid_count} 条（最旧：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(page_oldest_timestamp))}）")
+                tencent_logger.info(f"[违规处理] 第{current_page}页符合时间范围：{len(notification_list)} 条")
                 
-                # 判断是否需要继续翻页：如果本页最后一条通知还在时间范围内，继续
-                last_notification_timestamp = page_list[-1].get('timestamp', 0)
-                if last_notification_timestamp < oldest_allowed_timestamp:
-                    tencent_logger.info(f'[违规处理] ✅ 本页最后一条通知已超出时间范围 ({time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_notification_timestamp))} < {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(oldest_allowed_timestamp))})，提前停止翻页')
-                    should_continue = False
+                # 如果第一页最后一条通知还在时间范围内，继续翻页
+                if page_list:
+                    last_notification_timestamp = page_list[-1].get('timestamp', 0)
+                    should_continue = last_notification_timestamp >= oldest_allowed_timestamp
                 else:
-                    should_continue = True
+                    should_continue = False
                 
-                time.sleep(0.5)  # 避免请求过快
+                # 继续翻页直到：1) 某页所有通知都超出时间范围 2) 没有更多数据 3) 达到最大页数
+                max_pages = 100  # 最多检查100页
                 
-            except Exception as e:
-                tencent_logger.error(f'[违规处理] 第{current_page}页请求异常：{str(e)}')
-                break
-        
-        tencent_logger.info(f"[违规处理] 通知列表获取完成：共获取 {current_page} 页，筛选出 {len(notification_list)} 条符合时间范围的通知（总数：{total_count}）")
-        
-        # 第一步：收集所有优化建议视频
-        tencent_logger.info("=" * 60)
-        tencent_logger.info("[违规处理] 第一步：收集所有优化建议视频")
-        tencent_logger.info("=" * 60)
-        
-        violation_videos = collect_violation_videos(notification_list)
-        
-        tencent_logger.info(f"[违规处理] 收集结果：发现 {len(violation_videos)} 个优化建议视频")
-        
-        if not violation_videos:
-            tencent_logger.info("[违规处理] 未找到任何优化建议视频，无需继续处理")
-            return
-        
-        # 显示收集到的视频列表
-        for idx, v in enumerate(violation_videos, 1):
-            ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(v['publish_timestamp'])) if v['publish_timestamp'] else '无'
-            title_short = v['video_title'][:40]
-            object_id = v.get('object_id', '')
-            tencent_logger.info(f"[违规处理] [{idx}] {title_short} (发布: {ts_str}, ObjectID: {object_id or '无'})")
-        
-        # 第二步：按时间区间查询所有视频
-        tencent_logger.info("=" * 60)
-        tencent_logger.info("[违规处理] 第二步：按时间区间查询所有视频（自动翻页）")
-        tencent_logger.info("=" * 60)
-        
-        matched_videos = find_videos_by_object_id_and_time(session, headers, cookies, violation_videos)
+                while should_continue and current_page < max_pages and len(notification_list) < total_count:
+                    current_page += 1
+                    data['currentPage'] = current_page
+                    data['timestamp'] = str(int(time.time() * 1000))
+                    
+                    try:
+                        async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
+                            if response.status not in [200, 201]:
+                                tencent_logger.warning(f'[违规处理] 第{current_page}页请求失败，状态码：{response.status}')
+                                break
+                            
+                            result = await response.json()
+                            
+                            if result.get('errCode') != 0:
+                                tencent_logger.warning(f'[违规处理] 第{current_page}页API返回错误：{result.get("errMsg")}')
+                                break
+                            
+                            page_list = result.get('data', {}).get('list', [])
+                            
+                            if not page_list:
+                                tencent_logger.info(f'[违规处理] 第{current_page}页无数据，停止翻页')
+                                break
+                            
+                            # 统计本页符合时间范围的通知
+                            page_valid_count = 0
+                            page_oldest_timestamp = float('inf')
+                            
+                            for notification in page_list:
+                                notification_timestamp = notification.get('timestamp', 0)
+                                page_oldest_timestamp = min(page_oldest_timestamp, notification_timestamp)
+                                
+                                if notification_timestamp >= oldest_allowed_timestamp:
+                                    notification_list.append(notification)
+                                    page_valid_count += 1
+                            
+                            tencent_logger.info(f"[违规处理] 第{current_page}页获取：{len(page_list)} 条，符合时间范围：{page_valid_count} 条（最旧：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(page_oldest_timestamp))}）")
+                            
+                            # 判断是否需要继续翻页：如果本页最后一条通知还在时间范围内，继续
+                            last_notification_timestamp = page_list[-1].get('timestamp', 0)
+                            if last_notification_timestamp < oldest_allowed_timestamp:
+                                tencent_logger.info(f'[违规处理] ✅ 本页最后一条通知已超出时间范围 ({time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_notification_timestamp))} < {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(oldest_allowed_timestamp))})，提前停止翻页')
+                                should_continue = False
+                            else:
+                                should_continue = True
+                            
+                            await asyncio.sleep(0.5)  # 避免请求过快
+                            
+                    except Exception as e:
+                        tencent_logger.error(f'[违规处理] 第{current_page}页请求异常：{str(e)}')
+                        break
+                
+                tencent_logger.info(f"[违规处理] 通知列表获取完成：共获取 {current_page} 页，筛选出 {len(notification_list)} 条符合时间范围的通知（总数：{total_count}）")
+                
+                # 第一步：收集所有优化建议视频
+                tencent_logger.info("=" * 60)
+                tencent_logger.info("[违规处理] 第一步：收集所有优化建议视频")
+                tencent_logger.info("=" * 60)
+                
+                violation_videos = collect_violation_videos(notification_list)
+                
+                tencent_logger.info(f"[违规处理] 收集结果：发现 {len(violation_videos)} 个优化建议视频")
+                
+                if not violation_videos:
+                    tencent_logger.info("[违规处理] 未找到任何优化建议视频，无需继续处理")
+                    return
+                
+                # 显示收集到的视频列表
+                for idx, v in enumerate(violation_videos, 1):
+                    ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(v['publish_timestamp'])) if v['publish_timestamp'] else '无'
+                    title_short = v['video_title'][:40]
+                    object_id = v.get('object_id', '')
+                    tencent_logger.info(f"[违规处理] [{idx}] {title_short} (发布: {ts_str}, ObjectID: {object_id or '无'})")
+                
+                # 第二步：按时间区间查询所有视频
+                tencent_logger.info("=" * 60)
+                tencent_logger.info("[违规处理] 第二步：按时间区间查询所有视频（自动翻页）")
+                tencent_logger.info("=" * 60)
+                
+                # ✅ 调用异步版本的查询函数
+                matched_videos = await find_videos_by_object_id_and_time_async(session, headers, cookies, violation_videos)
         
         # 第三步：对比数据并执行逻辑
         tencent_logger.info("=" * 60)

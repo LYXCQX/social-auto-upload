@@ -763,8 +763,11 @@ class TencentVideo(object):
             if not os.path.exists(self.account_file):
                 return False
             
-            with open(self.account_file, 'r', encoding='utf-8') as f:
-                cookie_data = json.load(f)
+            # ✅ 使用异步文件读取
+            import aiofiles
+            async with aiofiles.open(self.account_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                cookie_data = json.loads(content)
             
             # 检查cookies数组
             cookies = cookie_data.get('cookies', [])
@@ -1280,8 +1283,11 @@ class TencentVideo(object):
         
         try:
             # 从session文件读取cookie
-            with open(self.account_file, 'r', encoding='utf-8') as f:
-                session_data = json.load(f)
+            # ✅ 使用异步文件读取
+            import aiofiles
+            async with aiofiles.open(self.account_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                session_data = json.loads(content)
             
             cookies_list = session_data.get('cookies', [])
             sessionid = None
@@ -1359,7 +1365,10 @@ class TencentVideo(object):
                     'reqScene': 7
                 }
                 print(data)
-                response = session.post(url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False)
+                # ✅ 使用 asyncio.to_thread 将同步请求转移到线程池
+                response = await asyncio.to_thread(
+                    session.post, url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False
+                )
                 
                 if response.status_code not in [200, 201]:
                     tencent_logger.error(f"[删除流程-API] 查询视频列表失败（第{current_page}页），状态码：{response.status_code}")
@@ -1414,7 +1423,8 @@ class TencentVideo(object):
                             delete_fail_count += 1
                             tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count})")
                         
-                        time.sleep(1)  # 避免请求过快
+                        # ✅ 使用 asyncio.sleep 替代 time.sleep
+                        await asyncio.sleep(1)  # 避免请求过快
                         should_continue = True
                     else:
                         tencent_logger.info(f"[删除流程-API] => 不符合删除条件")
@@ -1429,7 +1439,8 @@ class TencentVideo(object):
                     break
                 
                 current_page += 1
-                time.sleep(0.5)
+                # ✅ 使用 asyncio.sleep 替代 time.sleep
+                await asyncio.sleep(0.5)
             
             tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
             
