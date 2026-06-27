@@ -1668,7 +1668,21 @@ class TencentVideo(object):
                 if time.time() - start_time > timeout:
                     raise UpdateError(f"  [视频号上传] {self.file_path} 发布操作超过两分钟，强制结束{self.file_path}")
 
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
+                
+                # 检查是否有"定时发表时间不可晚于当前时间"的提示
+                try:
+                    time_error_msg = page.locator('div:text("定时发表时间不可晚于当前时间")')
+                    if await time_error_msg.count() > 0:
+                        tencent_logger.warning(f'  [视频号上传] {self.file_path} 检测到定时发表时间错误提示，点击不定时')
+                        # 直接点击"不定时"所在的div
+                        no_schedule_div = page.locator('div:text("不定时")')
+                        if await no_schedule_div.count() > 0:
+                            await no_schedule_div.click()
+                            tencent_logger.info(f'  [视频号上传] {self.file_path} 已点击不定时')
+                except Exception as e:
+                    tencent_logger.warning(f'  [视频号上传] {self.file_path} 检查定时发表时间失败: {str(e)}')
+                
                 # 检查是否出现"将此次编辑保留?"文本
                 has_edit_retain = await page.locator('div:has-text("将此次编辑保留?")').count() > 0
                 tencent_logger.info(f"  [视频号上传] {self.file_path} 是否找到编辑保留提示框: {has_edit_retain}")
@@ -1896,7 +1910,21 @@ class TencentVideo(object):
     async def add_collection(self, page):
         if not self.collection:
             return
-
+        
+        # 在添加合集前，检查是否有重复标题的提示
+        try:
+            # 找到包含重复提示的对话框
+            dialog = page.locator('.weui-desktop-dialog:has(div:text("此标题与现有合集重复，请修改标题后再试"))')
+            # 在该对话框中找到取消按钮并点击
+            cancel_button = dialog.locator('button:text("取消")')
+            if await cancel_button.count() > 0:
+                tencent_logger.warning(f'  [视频号上传] {self.file_path} 检测到合集标题重复提示，点击取消按钮')
+                await cancel_button.click()
+                # 等待对话框关闭
+                await asyncio.sleep(0.5)
+        except Exception as e:
+            tencent_logger.warning(f'  [视频号上传] {self.file_path} 检查重复标题提示失败: {str(e)}')
+        
         await page.click(':text-is("选择合集")')
 
         # 等待合集列表容器可见
