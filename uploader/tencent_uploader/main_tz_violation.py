@@ -5,24 +5,53 @@
 import asyncio
 import time
 from datetime import datetime
+
+from aiohttp import ThreadedResolver, TCPConnector
+
 from social_auto_upload.utils.log import tencent_logger
 
 
-def extract_video_info_from_notification(content, ref_url):
-    """从通知内容和refUrl中提取视频信息"""
+def extract_video_info_from_notification(content, ref_url, title=''):
+    """从通知内容和refUrl中提取视频信息
+    
+    支持多种通知格式：
+    1. 作品优化建议：作品标题：xxx  发布时间：xxx
+    2. 限制传播：你于xxxx-xx-xx xx:xx:xx发表的短剧视频" #xxx..."中
+    """
     import re
     from urllib.parse import unquote
     
-    # 提取标题（第一行，去掉"作品标题："前缀）
-    title_match = re.search(r'作品标题：\s*(.+)', content)
-    video_title = title_match.group(1).strip() if title_match else ''
+    video_title = ''
+    publish_timestamp = 0
+    object_id = ''
     
-    # 提取发布时间
+    # ========== 提取标题 ==========
+    # 格式1：作品标题：《xxx》
+    title_match = re.search(r'作品标题：\s*(.+)', content)
+    if title_match:
+        video_title = title_match.group(1).strip()
+    # 格式2：短剧视频" #xxx..."中
+    else:
+        title_match2 = re.search(r'短剧视频["\s]*[#《]*([^"\.]+)', content)
+        if title_match2:
+            video_title = title_match2.group(1).strip()
+            # 清理可能的后缀
+            video_title = video_title.rstrip('...')
+    
+    # ========== 提取发布时间 ==========
+    # 格式1：发布时间：2026-06-26 07:10:01
     time_match = re.search(r'发布时间：(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', content)
-    publish_time_str = time_match.group(1) if time_match else ''
+    if time_match:
+        publish_time_str = time_match.group(1)
+    # 格式2：你于2026-06-26 07:10:01发表的
+    else:
+        time_match2 = re.search(r'你于(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})发表的', content)
+        if time_match2:
+            publish_time_str = time_match2.group(1)
+        else:
+            publish_time_str = ''
     
     # 转换为时间戳
-    publish_timestamp = 0
     if publish_time_str:
         try:
             dt = datetime.strptime(publish_time_str, '%Y-%m-%d %H:%M:%S')
@@ -30,21 +59,35 @@ def extract_video_info_from_notification(content, ref_url):
         except:
             pass
     
-    # 从refUrl中提取objectId（最靠谱的匹配字段）
-    # unique_id=mmfindermachineauditdelivery14943811069001337356
-    # 提取后面的数字部分就是objectId
-    object_id = ''
+    # ========== 提取ObjectID ==========
+    # 格式1：unique_id=mmfindermachineauditdelivery14943811069001337356
     if ref_url:
         unique_id_match = re.search(r'unique_id=mmfindermachineauditdelivery(\d+)', ref_url)
         if unique_id_match:
             object_id = unique_id_match.group(1)
+        # 格式2：rand_id=FDxxxxxxxxx (这种通常无法提取objectId)
+        # 后续只能依赖时间戳匹配
     
     return video_title, publish_timestamp, object_id
 
 
 def collect_violation_videos(notification_list):
-    """收集所有优化建议视频的信息（notification_list已经过滤过时间）"""
+    """收集所有违规视频的信息（notification_list已经过滤过时间）
+    
+    支持的违规类型：
+    1. 作品优化建议
+    2. 视频被暂时限制传播
+    3. 其他违规通知
+    """
     violation_videos = []
+    
+    # 定义需要处理的违规通知类型
+    violation_titles = [
+        '作品优化建议',
+        '你有1条视频号视频被暂时限制传播',
+        '视频号视频被暂时限制传播',
+        '你的视频号视频被暂时限制传播',
+    ]
     
     for notification in notification_list:
         title = notification.get('title', '')
@@ -53,29 +96,33 @@ def collect_violation_videos(notification_list):
         content = notification.get('content', '')
         ref_url = notification.get('refUrl', '')
         
-        # 检查是否是优化建议
-        if title == '作品优化建议' and is_special_jump == 0 and content:
+        # 检查是否是违规通知（支持多种类型）
+        is_violation = False
+        violation_type = ''
+        
+        for vt in violation_titles:
+            if vt in title:
+                is_violation = True
+                violation_type = vt
+                break
+        
+        if is_violation and is_special_jump == 0 and content:
             # 从content和refUrl中提取视频信息
-            video_title, publish_timestamp, object_id = extract_video_info_from_notification(content, ref_url)
+            video_title, publish_timestamp, object_id = extract_video_info_from_notification(content, ref_url, title)
             
-            if object_id:  # 优先使用objectId
+            # 只有当至少有objectId或时间戳时才添加
+            if object_id or publish_timestamp:
                 violation_videos.append({
                     'video_title': video_title,
                     'publish_timestamp': publish_timestamp,
                     'object_id': object_id,
                     'notification_timestamp': timestamp,
                     'content': content,
-                    'match_method': 'object_id'
+                    'violation_type': violation_type,  # 记录违规类型
+                    'match_method': 'object_id' if object_id else 'timestamp'
                 })
-            elif publish_timestamp:  # 降级到时间戳匹配
-                violation_videos.append({
-                    'video_title': video_title,
-                    'publish_timestamp': publish_timestamp,
-                    'object_id': '',
-                    'notification_timestamp': timestamp,
-                    'content': content,
-                    'match_method': 'timestamp'
-                })
+            else:
+                tencent_logger.warning(f"[违规处理] 无法从通知中提取有效信息: {title} - {content[:50]}...")
     
     return violation_videos
 
@@ -347,6 +394,8 @@ async def delete_violation_video(object_id, account_file=None, sessionid=None, w
         # ✅ 使用 aiohttp 进行异步HTTP请求
         connector = aiohttp.TCPConnector(ssl=False)
         timeout = aiohttp.ClientTimeout(total=30)
+        resolver = ThreadedResolver()  # 使用线程池进行DNS解析，避免Windows异步DNS问题
+        connector = TCPConnector(resolver=resolver, ssl=False)
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
                 # 打印响应参数
@@ -453,6 +502,8 @@ async def hide_violation_video(object_id, account_file=None, sessionid=None, wxu
         # ✅ 使用 aiohttp 进行异步HTTP请求
         connector = aiohttp.TCPConnector(ssl=False)
         timeout = aiohttp.ClientTimeout(total=30)
+        resolver = ThreadedResolver()  # 使用线程池进行DNS解析，避免Windows异步DNS问题
+        connector = TCPConnector(resolver=resolver, ssl=False)
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
                 # 打印响应参数
@@ -559,8 +610,8 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         
         tencent_logger.info(f"[违规处理] 时间过滤：只处理 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(oldest_allowed_timestamp))} 之后的通知")
         
-        # ✅ 使用 aiohttp 进行异步HTTP请求
-        connector = aiohttp.TCPConnector(ssl=False)
+        resolver = ThreadedResolver()  # 使用线程池进行DNS解析，避免Windows异步DNS问题
+        connector = aiohttp.TCPConnector(resolver=resolver, ssl=False)
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
@@ -665,18 +716,19 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 
                 violation_videos = collect_violation_videos(notification_list)
                 
-                tencent_logger.info(f"[违规处理] 收集结果：发现 {len(violation_videos)} 个优化建议视频")
+                tencent_logger.info(f"[违规处理] 收集结果：发现 {len(violation_videos)} 个违规视频")
                 
                 if not violation_videos:
-                    tencent_logger.info("[违规处理] 未找到任何优化建议视频，无需继续处理")
+                    tencent_logger.info("[违规处理] 未找到任何违规视频，无需继续处理")
                     return
                 
                 # 显示收集到的视频列表
                 for idx, v in enumerate(violation_videos, 1):
                     ts_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(v['publish_timestamp'])) if v['publish_timestamp'] else '无'
-                    title_short = v['video_title'][:40]
+                    title_short = v['video_title'][:40] if v['video_title'] else '未知标题'
                     object_id = v.get('object_id', '')
-                    tencent_logger.info(f"[违规处理] [{idx}] {title_short} (发布: {ts_str}, ObjectID: {object_id or '无'})")
+                    violation_type = v.get('violation_type', '未知类型')
+                    tencent_logger.info(f"[违规处理] [{idx}] {title_short} (类型: {violation_type}, 发布: {ts_str}, ObjectID: {object_id or '无'})")
                 
                 # 第二步：按时间区间查询所有视频
                 tencent_logger.info("=" * 60)
