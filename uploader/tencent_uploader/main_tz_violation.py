@@ -539,8 +539,17 @@ async def hide_violation_video(object_id, account_file=None, sessionid=None, wxu
 
 
 async def check_and_handle_violation(account_file, violation_delete_days, violation_delete_views,
-                                     violation_hide_views):
-    """检查并处理违规视频"""
+                                     violation_hide_views, user_id=None, last_check_timestamp=None):
+    """检查并处理违规视频
+    
+    Args:
+        account_file: session文件路径
+        violation_delete_days: 检查天数
+        violation_delete_views: 删除播放量阈值
+        violation_hide_views: 隐藏播放量阈值
+        user_id: 用户ID，用于更新数据库
+        last_check_timestamp: 最后检查时间戳，避免重复处理
+    """
     import json
     import aiohttp
     
@@ -550,6 +559,13 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
     tencent_logger.info(f"[违规处理] 检查范围: 最近{violation_delete_days}天")
     tencent_logger.info(f"[违规处理] 删除条件: 播放量 < {violation_delete_views}")
     tencent_logger.info(f"[违规处理] 隐藏条件: 播放量 >= {violation_hide_views}")
+    
+    # 使用传入的最后检查时间戳
+    if last_check_timestamp:
+        tencent_logger.info(f"[违规处理] 上次检查时间戳: {last_check_timestamp} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(last_check_timestamp))})")
+    else:
+        tencent_logger.info("[违规处理] 首次检查违规，无历史时间戳")
+    
     tencent_logger.info("=" * 60)
     
     try:
@@ -638,16 +654,32 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 
                 # 检查第一页是否有符合时间范围的通知
                 page_has_valid_notifications = False
+                newest_notification_timestamp = 0  # 记录最新的通知时间戳
+                
                 for notification in page_list:
                     notification_timestamp = notification.get('timestamp', 0)
+                    newest_notification_timestamp = max(newest_notification_timestamp, notification_timestamp)
+                    
+                    # 如果有上次检查时间戳，只处理比它新的通知
+                    if last_check_timestamp and notification_timestamp <= last_check_timestamp:
+                        tencent_logger.info(f"[违规处理] 通知时间戳 {notification_timestamp} <= 上次检查时间戳 {last_check_timestamp}，已处理过，停止检查")
+                        break
+                    
                     if notification_timestamp >= oldest_allowed_timestamp:
                         notification_list.append(notification)
                         page_has_valid_notifications = True
                 
                 tencent_logger.info(f"[违规处理] 第{current_page}页符合时间范围：{len(notification_list)} 条")
                 
-                # 如果第一页最后一条通知还在时间范围内，继续翻页
-                if page_list:
+                # 如果遇到了上次检查的时间戳，不再翻页
+                if last_check_timestamp and page_list:
+                    last_notification_timestamp = page_list[-1].get('timestamp', 0)
+                    if last_notification_timestamp <= last_check_timestamp:
+                        tencent_logger.info(f"[违规处理] 已到达上次检查的时间节点，停止翻页")
+                        should_continue = False
+                    else:
+                        should_continue = last_notification_timestamp >= oldest_allowed_timestamp
+                elif page_list:
                     last_notification_timestamp = page_list[-1].get('timestamp', 0)
                     should_continue = last_notification_timestamp >= oldest_allowed_timestamp
                 else:
@@ -682,18 +714,30 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                             # 统计本页符合时间范围的通知
                             page_valid_count = 0
                             page_oldest_timestamp = float('inf')
+                            stop_pagination = False
                             
                             for notification in page_list:
                                 notification_timestamp = notification.get('timestamp', 0)
+                                newest_notification_timestamp = max(newest_notification_timestamp, notification_timestamp)
                                 page_oldest_timestamp = min(page_oldest_timestamp, notification_timestamp)
+                                
+                                # 如果有上次检查时间戳，遇到已处理的通知就停止
+                                if last_check_timestamp and notification_timestamp <= last_check_timestamp:
+                                    tencent_logger.info(f"[违规处理] 第{current_page}页遇到已处理的通知（时间戳：{notification_timestamp}），停止翻页")
+                                    stop_pagination = True
+                                    break
                                 
                                 if notification_timestamp >= oldest_allowed_timestamp:
                                     notification_list.append(notification)
                                     page_valid_count += 1
                             
+                            if stop_pagination:
+                                tencent_logger.info(f"[违规处理] 第{current_page}页符合条件：{page_valid_count} 条，已到达上次检查节点")
+                                break
+                            
                             tencent_logger.info(f"[违规处理] 第{current_page}页获取：{len(page_list)} 条，符合时间范围：{page_valid_count} 条（最旧：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(page_oldest_timestamp))}）")
                             
-                            # 判断是否需要继续翻页：如果本页最后一条通知还在时间范围内，继续
+                            # 判断是否需要继续翻页
                             last_notification_timestamp = page_list[-1].get('timestamp', 0)
                             if last_notification_timestamp < oldest_allowed_timestamp:
                                 tencent_logger.info(f'[违规处理] ✅ 本页最后一条通知已超出时间范围 ({time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_notification_timestamp))} < {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(oldest_allowed_timestamp))})，提前停止翻页')
@@ -825,6 +869,19 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         tencent_logger.info(f"[违规处理] 已是隐藏状态: {already_hidden_count} 个（跳过）")
         tencent_logger.info(f"[违规处理] 暂不处理: {skip_count} 个")
         tencent_logger.info("=" * 60)
+        
+        # 更新用户的最后检查时间戳
+        if user_id and newest_notification_timestamp > 0:
+            try:
+                from db_manager import get_db_manager
+                
+                db_manager = get_db_manager()
+                
+                # 更新最后检查时间戳
+                db_manager.update_user(user_id, {'last_violation_check_timestamp': newest_notification_timestamp})
+                tencent_logger.info(f"[违规处理] ✅ 已更新最后检查时间戳: {newest_notification_timestamp} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(newest_notification_timestamp))})")
+            except Exception as e:
+                tencent_logger.warning(f"[违规处理] 更新最后检查时间戳失败: {str(e)}")
         
     except Exception as e:
         tencent_logger.exception(f"[违规处理] 处理过程出错: {str(e)}")

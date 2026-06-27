@@ -1085,6 +1085,19 @@ class TencentVideo(object):
 
             await context.storage_state(path=f"{self.account_file}")  # 保存cookie
             tencent_logger.success('  [-]cookie更新完毕！')
+            
+            # 检查页面是否有错误视频，如果有则删除
+            try:
+                fail_video_count = await page.locator('.post-processed-fail').count()
+                if fail_video_count > 0:
+                    tencent_logger.warning(f'[错误视频处理] 发现 {fail_video_count} 个错误视频，准备删除')
+                    await delete_videos_by_conditions(page, only_delete_fail=True)
+                    tencent_logger.success('[错误视频处理] 错误视频删除完毕')
+                else:
+                    tencent_logger.info('[错误视频处理] 未发现错误视频')
+            except Exception as e:
+                tencent_logger.exception(f'[错误视频处理] 检查或删除错误视频时出错: {str(e)}')
+            
             if should_delete:
                 await self.delete_video(page)
         if not (self.publish_date and self.publish_date != 0):
@@ -1097,10 +1110,17 @@ class TencentVideo(object):
             tencent_logger.info(f"[删除流程] self.info完整内容: {self.info}")
 
             if delete_use_api:
-                tencent_logger.info("[删除流程] 使用API接口删除视频")
-                await self.delete_videos_by_api(
+                tencent_logger.info("[删除流程] 使用API接口删除视频（异步执行，不阻塞主流程）")
+                # 获取用户信息用于更新时间戳
+                user_id = self.info.get("user_id")
+                last_delete_timestamp = self.info.get("last_delete_video_timestamp")
+                # 创建独立的异步任务，不等待完成
+                asyncio.create_task(self.delete_videos_by_api(
                     minutes_ago=self.info.get("delete_time_threshold", 1440), 
-                    max_views=self.info.get("delete_play_threshold", 100))
+                    max_views=self.info.get("delete_play_threshold", 100),
+                    user_id=user_id,
+                    last_delete_timestamp=last_delete_timestamp))
+                tencent_logger.info("[删除流程] API删除任务已在后台启动")
             else:
                 tencent_logger.info("[删除流程] 使用页面操作删除视频")
                 await delete_videos_by_conditions(page, 
@@ -1108,23 +1128,29 @@ class TencentVideo(object):
                     max_views=self.info.get("delete_play_threshold", 100),
                     page_index=50)
         
-        # 检查并处理违规视频
+        # 检查并处理违规视频（异步执行，不阻塞主流程）
         if self.info and self.info.get("delete_violation", False):
             try:
-                # 使用当前时间作为发布时间戳
-                publish_timestamp = int(time.time())
                 violation_delete_days = self.info.get("violation_delete_days", 7)
                 violation_delete_views = self.info.get("violation_delete_views", 100)
                 violation_hide_views = self.info.get("violation_hide_views", 1000)
+                user_id = self.info.get("user_id")  # 获取用户ID
+                last_check_timestamp = self.info.get("last_violation_check_timestamp")  # 获取最后检查时间戳
                 
-                await check_and_handle_violation(
+                tencent_logger.info("[违规处理] 开始后台检查违规视频（不阻塞主流程）")
+                # 创建独立的异步任务，不等待完成
+                asyncio.create_task(check_and_handle_violation(
                     self.account_file,  # 传递session文件路径
                     violation_delete_days,
                     violation_delete_views,
-                    violation_hide_views
-                )
+                    violation_hide_views,
+                    user_id,  # 传递用户ID用于更新数据库
+                    last_check_timestamp  # 传递最后检查时间戳，避免重复查询
+                ))
+                tencent_logger.info("[违规处理] 违规检查任务已在后台启动")
             except Exception as e:
-                tencent_logger.exception(f"检查违规视频时出错: {str(e)}")
+                tencent_logger.exception(f"启动违规检查任务时出错: {str(e)}")
+
 
 
         # 关闭浏览器上下文和浏览器实例
@@ -1265,11 +1291,13 @@ class TencentVideo(object):
             except Exception as e:
                 tencent_logger.exception(f"  [视频号上传] {self.file_path} [删除流程] 删除视频时出错：{str(e)}")
 
-    async def delete_videos_by_api(self, minutes_ago=None, max_views=None):
+    async def delete_videos_by_api(self, minutes_ago=None, max_views=None, user_id=None, last_delete_timestamp=None):
         """
         使用API接口根据时间间隔和播放量条件删除视频
         :param minutes_ago: 多少分钟之前的视频
         :param max_views: 最大播放量
+        :param user_id: 用户ID，用于更新最后删除时间戳
+        :param last_delete_timestamp: 最后删除时的视频发布时间戳，避免重复处理
         """
         import requests
         import json
@@ -1280,6 +1308,9 @@ class TencentVideo(object):
             return
         
         tencent_logger.info(f"[删除流程-API] 开始使用API删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views}")
+        
+        if last_delete_timestamp:
+            tencent_logger.info(f"[删除流程-API] 上次删除时的视频时间戳: {last_delete_timestamp} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(last_delete_timestamp))})")
         
         try:
             # 从session文件读取cookie
@@ -1390,13 +1421,26 @@ class TencentVideo(object):
                 
                 tencent_logger.info(f"[删除流程-API] 第{current_page}页: 获取 {len(video_list)} 个视频")
                 
+                # 记录本页第一条视频的发布时间（用于更新时间戳）
+                first_video_timestamp = None
+                if current_page == 1 and video_list:
+                    first_video_timestamp = video_list[0].get('createTime', 0)
+                
                 # 检查符合条件的视频并立即删除
                 should_continue = False
+                stop_pagination = False
+                
                 for video in video_list:
                     create_time = video.get('createTime', 0)
                     read_count = video.get('readCount', 0)
                     export_id = video.get('exportId', '')
                     object_id = video.get('objectId', '')
+                    
+                    # 如果有上次删除时间戳，遇到更早或相等的视频就停止
+                    if last_delete_timestamp and create_time <= last_delete_timestamp:
+                        tencent_logger.info(f"[删除流程-API] 遇到已处理的视频（发布时间：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(create_time))}），停止检查")
+                        stop_pagination = True
+                        break
                     
                     # 计算时间差（分钟）
                     video_time = datetime.fromtimestamp(create_time)
@@ -1429,6 +1473,11 @@ class TencentVideo(object):
                     else:
                         tencent_logger.info(f"[删除流程-API] => 不符合删除条件")
                 
+                # 如果遇到了已处理的视频，停止翻页
+                if stop_pagination:
+                    tencent_logger.info(f"[删除流程-API] 已到达上次处理的时间节点，停止翻页")
+                    break
+                
                 # 如果没有找到符合条件的视频且已检查完本页，检查是否需要翻页
                 if not should_continue and len(video_list) >= page_size:
                     # 继续翻页查找
@@ -1443,6 +1492,19 @@ class TencentVideo(object):
                 await asyncio.sleep(0.5)
             
             tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
+            
+            # 更新用户的最后删除视频时间戳（使用第一页第一条视频的发布时间）
+            if user_id and first_video_timestamp:
+                try:
+                    from db_manager import get_db_manager
+                    
+                    db_manager = get_db_manager()
+                    
+                    # 更新最后删除时的视频时间戳
+                    db_manager.update_user(user_id, {'last_delete_video_timestamp': first_video_timestamp})
+                    tencent_logger.info(f"[删除流程-API] ✅ 已更新最后删除视频时间戳: {first_video_timestamp} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(first_video_timestamp))})")
+                except Exception as e:
+                    tencent_logger.warning(f"[删除流程-API] 更新最后删除时间戳失败: {str(e)}")
             
         except Exception as e:
             tencent_logger.exception(f"[删除流程-API] 删除视频时出错：{str(e)}")
