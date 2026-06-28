@@ -1091,7 +1091,7 @@ class TencentVideo(object):
                 fail_video_count = await page.locator('.post-processed-fail').count()
                 if fail_video_count > 0:
                     tencent_logger.warning(f'[错误视频处理] 发现 {fail_video_count} 个错误视频，准备删除')
-                    await delete_videos_by_conditions(page, only_delete_fail=True)
+                    await delete_videos_by_conditions(page, page_index=5, only_delete_fail=True)
                     tencent_logger.success('[错误视频处理] 错误视频删除完毕')
                 else:
                     tencent_logger.info('[错误视频处理] 未发现错误视频')
