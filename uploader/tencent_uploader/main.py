@@ -534,6 +534,35 @@ async def weidaren_click_publish_and_save(page, context, account_file):
     user_name = await new_page.locator('.finder-nickname').text_content()
     logger.info(f'{user_id}---{user_name}')
     
+    # 获取头像和粉丝数
+    avatar_url = None
+    fans_count = 0
+    video_count = 0
+    
+    try:
+        # 获取头像：finder-info-container 下的 img 标签的 src
+        avatar_element = new_page.locator('.finder-info-container img').first
+        if avatar_element:
+            avatar_url = await avatar_element.get_attribute('src')
+            tencent_logger.info(f'[微达人登录] 获取到头像URL: {avatar_url}')
+    except Exception as e:
+        tencent_logger.warning(f'[微达人登录] 获取头像失败: {e}')
+    
+    try:
+        # 获取视频数和粉丝数：finder-content-info 下的 finder-info-num
+        info_nums = await new_page.locator('.finder-content-info .finder-info-num').all_text_contents()
+        if len(info_nums) >= 2:
+            video_count_str = info_nums[0].strip()
+            fans_count_str = info_nums[1].strip()
+            
+            # 转换为数字（可能包含万、亿等单位）
+            video_count = parse_count_string(video_count_str)
+            fans_count = parse_count_string(fans_count_str)
+            
+            tencent_logger.info(f'[微达人登录] 视频数: {video_count}, 粉丝数: {fans_count}')
+    except Exception as e:
+        tencent_logger.warning(f'[微达人登录] 获取粉丝数失败: {e}')
+    
     # 保存cookie
     await context.storage_state(path=get_account_file(user_id, SOCIAL_MEDIA_TENCENT, user_name))
     tencent_logger.success("[微达人] cookie已保存")
@@ -541,7 +570,7 @@ async def weidaren_click_publish_and_save(page, context, account_file):
     # 关闭新标签页
     await new_page.close()
     
-    return user_id, user_name
+    return user_id, user_name, avatar_url, fans_count, video_count
 
 
 async def get_weidaren_cookie_br(account_file, browser):
@@ -577,9 +606,9 @@ async def get_weidaren_cookie_br(account_file, browser):
     tencent_logger.info("[微达人] 登录成功，检测到邀约字样")
     
     # 复用点击发视频和保存cookie的逻辑
-    user_id, user_name = await weidaren_click_publish_and_save(page, context, account_file)
+    user_id, user_name, avatar_url, fans_count, video_count = await weidaren_click_publish_and_save(page, context, account_file)
     
-    return user_id, user_name
+    return user_id, user_name, avatar_url, fans_count, video_count
 
 
 async def weidaren_setup(account_file, handle=False, local_executable_path=None, proxy_setting=None, camoufox=False, addons_path=None):
@@ -597,7 +626,8 @@ async def weidaren_setup(account_file, handle=False, local_executable_path=None,
             # 从文件名中提取用户信息
             base_name = os.path.basename(account_file)
             user_id, user_name = base_name.split('_')[:2]
-            return True, user_id, user_name
+            # channels在线时，无法获取头像和粉丝数，返回默认值
+            return True, user_id, user_name, None, 0, 0
         
         # 第二步：检查 store.weixin.qq.com 是否在线
         tencent_logger.info(f'[微达人登录] channels.weixin.qq.com 离线，检查 store.weixin.qq.com 是否在线...')
@@ -633,11 +663,11 @@ async def weidaren_setup(account_file, handle=False, local_executable_path=None,
     
     # 第三步：完全离线，需要重新登录
     if not handle:
-        return False, None, None
+        return False, None, None, None, 0, 0
     
     tencent_logger.info(f'[微达人登录] {account_file} cookie文件不存在或已失效，即将自动打开浏览器，请扫码登录，登陆后会自动生成cookie文件')
-    user_id, user_name = await get_weidaren_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
-    return True, user_id, user_name
+    user_id, user_name, avatar_url, fans_count, video_count = await get_weidaren_cookie(account_file, local_executable_path=local_executable_path,proxy_setting=proxy_setting,camoufox=camoufox,addons_path=addons_path)
+    return True, user_id, user_name, avatar_url, fans_count, video_count
 
 
 async def weidaren_post_login(account_file, browser):
@@ -651,14 +681,14 @@ async def weidaren_post_login(account_file, browser):
         await page.goto("https://store.weixin.qq.com/talent/channel/finder")
         
         # 复用点击发视频和保存cookie的逻辑
-        user_id, user_name = await weidaren_click_publish_and_save(page, context, account_file)
+        user_id, user_name, avatar_url, fans_count, video_count = await weidaren_click_publish_and_save(page, context, account_file)
         
         # 关闭页面和浏览器
         await page.close()
         await context.close()
         await browser.close()
         
-        return True, user_id, user_name
+        return True, user_id, user_name, avatar_url, fans_count, video_count
         
     except Exception as e:
         tencent_logger.error(f"[微达人] 登录后逻辑执行失败: {str(e)}")
