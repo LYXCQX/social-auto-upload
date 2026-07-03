@@ -196,8 +196,18 @@ class TiktokVideo(object):
         tiktok_logger.info('  [-] update cookie！')
         await asyncio.sleep(2)  # close delay for look the video status
         # close all
-        await context.close()
-        await browser.close()
+        try:
+            await context.close()
+        except Exception as ctx_error:
+            tiktok_logger.warning(f"关闭浏览器上下文时出错（已忽略）: {str(ctx_error)}")
+        
+        # 只有在 playwright 不为 None 时才关闭浏览器（说明浏览器是在此方法内创建的）
+        if playwright:
+            try:
+                await browser.close()
+            except Exception as browser_error:
+                tiktok_logger.warning(f"关闭浏览器时出错（已忽略）: {str(browser_error)}")
+        
         return True, msg_res
 
     async def add_title_tags(self, page):
