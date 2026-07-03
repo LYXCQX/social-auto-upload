@@ -70,7 +70,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
             if page_reload:
                 # 刷新页面
                 tencent_logger.info("[删除流程] 刷新页面")
-                await page.reload()
+                await page.goto(page.url)
                 await asyncio.sleep(1)
 
             try:
