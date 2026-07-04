@@ -1185,9 +1185,9 @@ class TencentVideo(object):
 
         # 关闭浏览器上下文和浏览器实例
         try:
-            if context:
+            if playwright and context:
                 await context.close()
-            if browser:
+            if playwright and browser:
                 await browser.close()
         except Exception as e:
             tencent_logger.exception(f"关闭浏览器资源时出错: {str(e)}")

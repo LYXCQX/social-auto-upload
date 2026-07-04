@@ -514,13 +514,19 @@ class DouYinVideo(object):
         douyin_logger.success('  [-]cookie更新完毕！')
         await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
         # 关闭浏览器上下文和浏览器实例
-        try:
-            if context:
+        if context:
+            try:
                 await context.close()
-            if browser:
+            except Exception as ctx_error:
+                douyin_logger.warning(f"关闭浏览器上下文时出错（已忽略）: {str(ctx_error)}")
+        
+        # 只有在 playwright 不为 None 时才关闭浏览器（说明浏览器是在此方法内创建的）
+        if playwright and browser:
+            try:
                 await browser.close()
-        except Exception as e:
-            douyin_logger.exception(f"关闭浏览器资源时出错: {str(e)}")
+            except Exception as browser_error:
+                douyin_logger.warning(f"关闭浏览器时出错（已忽略）: {str(browser_error)}")
+        
         return True, msg_res
 
 
