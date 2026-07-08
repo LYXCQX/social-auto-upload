@@ -386,6 +386,62 @@ async def add_short_play_by_juji(parent_, page,pub_config,idx=1,need_click =True
         tencent_logger.error(f'超时{timeout}秒，未找到匹配【{match_title}】的短剧')
         raise UpdateError(f"未找到匹配的短剧：{match_title}")
 
+async def add_declaration(parent_, page):
+    """添加视频号自主声明"""
+    try:
+        # 检查info中是否有declaration且不为"不声明"和"无需标注"
+        if not parent_.info:
+            tencent_logger.info('[视频号声明] 没有info信息，跳过声明添加')
+            return
+
+        declaration = parent_.info.get('declaration', '')
+        if not declaration or declaration == '不声明' or declaration == '无需标注':
+            tencent_logger.info('[视频号声明] 没有声明内容或选择不声明，跳过声明添加')
+            return
+
+        tencent_logger.info(f'[视频号声明] 开始添加声明: {declaration}')
+
+        # 检查页面上是否有"选择视频标注"的span
+        video_annotation_span = page.locator('span:has-text("选择视频标注")')
+        if await video_annotation_span.count() > 0:
+            tencent_logger.info('[视频号声明] 找到"选择视频标注"按钮')
+            # 点击"选择视频标注"
+            await video_annotation_span.click()
+            tencent_logger.info('[视频号声明] 已点击"选择视频标注"按钮')
+
+            # 等待声明选项容器出现
+            await page.wait_for_selector('.mark-tag-options', timeout=5000)
+            tencent_logger.info('[视频号声明] 声明选项容器已出现')
+
+            # 查找包含目标文本的选项
+            # 使用更精确的选择器：在 .mark-tag-options 容器内查找包含目标文本的 .option-main
+            declaration_option = page.locator(f'.mark-tag-options .mark-tag-option:has(.option-main:text-is("{declaration}"))')
+            
+            # 检查声明选项是否存在
+            if await declaration_option.count() > 0:
+                tencent_logger.info(f'[视频号声明] 找到声明选项: {declaration}，准备点击')
+                await declaration_option.click()
+                tencent_logger.info(f'[视频号声明] 已点击声明选项: {declaration}')
+                
+                # 等待选择生效
+                await asyncio.sleep(1)
+                tencent_logger.info('[视频号声明] 声明添加完成')
+            else:
+                tencent_logger.warning(f'[视频号声明] 声明选项 {declaration} 未找到')
+                # 尝试打印所有可用的选项用于调试
+                try:
+                    all_options = await page.locator('.mark-tag-options .option-main').all_text_contents()
+                    tencent_logger.info(f'[视频号声明] 页面上可用的声明选项: {all_options}')
+                except:
+                    pass
+        else:
+            tencent_logger.info('[视频号声明] 页面上未找到"选择视频标注"按钮，可能当前账号不支持此功能')
+
+    except Exception as e:
+        tencent_logger.error(f'[视频号声明] 添加声明失败: {str(e)}')
+        tencent_logger.exception(f'[视频号声明] 详细错误信息')
+
+
 async def add_comment(page, comment=None):
     try:
         try:
