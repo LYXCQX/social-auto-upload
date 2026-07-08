@@ -25,7 +25,7 @@ from social_auto_upload.utils.log import tencent_logger
 from log import logger
 from social_auto_upload.uploader.tencent_uploader.main_tz import add_original
 
-from social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji, add_comment
+from social_auto_upload.uploader.tencent_uploader.main_tz import add_short_play_by_juji, add_comment, add_declaration
 
 from social_auto_upload.utils.base_up_util import dispatch_upload
 
@@ -1069,6 +1069,11 @@ class TencentVideo(object):
                 await add_original(self, page)
             except:
                 tencent_logger.exception(f'  [视频号上传] {self.file_path} 添加原创失败，不影响执行')
+            # 添加自主声明
+            try:
+                await add_declaration(self, page)
+            except:
+                tencent_logger.exception(f'  [视频号上传] {self.file_path} 添加自主声明失败，不影响执行')
             should_delete = self.info and self.info.get("delete_platform_video", False) and (i < upload_count - 1)
             if should_delete:
                 random_uuid = str(uuid.uuid4())[:5]
