@@ -1711,7 +1711,7 @@ class TencentVideo(object):
                     if await time_error_msg.count() > 0:
                         tencent_logger.warning(f'  [视频号上传] {self.file_path} 检测到定时发表时间错误提示，点击不定时')
                         # 直接点击"不定时"所在的div
-                        no_schedule_div = page.locator('div:text("不定时")')
+                        no_schedule_div = page.locator('label:has-text("不定时")')
                         if await no_schedule_div.count() > 0:
                             await no_schedule_div.click()
                             tencent_logger.info(f'  [视频号上传] {self.file_path} 已点击不定时')
