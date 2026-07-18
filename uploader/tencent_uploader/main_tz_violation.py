@@ -408,21 +408,26 @@ async def delete_violation_video(object_id, account_file=None, sessionid=None, w
                 except:
                     response_text = await response.text()
                     tencent_logger.warning(f"[违规处理-删除] 响应Body (非JSON): {response_text[:500]}")
-                
+                errmsg = '删除成功'
                 if response.status in [200, 201]:
                     result = await response.json()
                     if result.get('errCode') == 0:
                         tencent_logger.info(f"[违规处理-删除] ✅ 视频删除成功: {object_id}")
                         tencent_logger.info("=" * 80)
-                        return True
+                        res_data = result.get('data')
+                        if res_data:
+                            baseResp = res_data.get('baseResp')
+                            if baseResp:
+                                errmsg = res_data.get('errmsg')
+                        return True,errmsg
                     else:
                         tencent_logger.error(f"[违规处理-删除] ❌ 删除失败 - errCode: {result.get('errCode')}, errMsg: {result.get('errMsg')}")
                         tencent_logger.info("=" * 80)
-                        return False
+                        return False,errmsg
                 else:
                     tencent_logger.error(f"[违规处理-删除] ❌ 删除请求失败，状态码: {response.status}")
                     tencent_logger.info("=" * 80)
-                    return False
+                    return False,errmsg
             
     except Exception as e:
         tencent_logger.exception(f"[违规处理-删除] 删除视频异常: {str(e)}")
@@ -827,11 +832,14 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 if read_count < violation_delete_views:
                     tencent_logger.warning(f"[违规处理] ❌ 满足删除条件（{read_count} < {violation_delete_views}）")
                     # 执行删除（使用 exportId）
-                    success = await delete_violation_video(export_id, account_file, sessionid, wxuin)
+                    success,errmsg = await delete_violation_video(export_id, account_file, sessionid, wxuin)
+                    await asyncio.sleep(1.5)  # 避免请求过快
                     if success:
                         delete_count += 1
                         tencent_logger.info(f"[违规处理] 删除成功")
                     else:
+                        if errmsg =='暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                            break
                         tencent_logger.error(f"[违规处理] 删除失败")
                         
                 elif read_count >= violation_hide_views:
@@ -843,6 +851,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                         tencent_logger.warning(f"[违规处理] 🔒 满足隐藏条件（{read_count} >= {violation_hide_views}）")
                         # 执行隐藏（使用 exportId）
                         success = await hide_violation_video(export_id, account_file, sessionid, wxuin)
+                        await asyncio.sleep(1.5)  # 避免请求过快
                         if success:
                             hide_count += 1
                             tencent_logger.info(f"[违规处理] 隐藏成功")

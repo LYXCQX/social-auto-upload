@@ -1494,11 +1494,14 @@ class TencentVideo(object):
                         tencent_logger.info(f"[删除流程-API] => 符合删除条件，立即删除")
                         
                         # 立即执行删除
-                        success = await delete_violation_video(export_id, self.account_file, sessionid, wxuin)
+                        success,errmsg = await delete_violation_video(export_id, self.account_file, sessionid, wxuin)
+                        await asyncio.sleep(1.5)  # 避免请求过快
                         if success:
                             delete_success_count += 1
                             tencent_logger.info(f"[删除流程-API] ✅ 删除成功 (已删除: {delete_success_count})")
                         else:
+                            if errmsg =='暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                                break
                             delete_fail_count += 1
                             tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count})")
                         
