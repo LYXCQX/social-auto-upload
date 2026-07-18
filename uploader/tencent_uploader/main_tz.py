@@ -2,6 +2,8 @@
 import asyncio
 import os
 import time
+import json
+import hashlib
 from datetime import datetime
 
 from patchright.async_api import async_playwright
@@ -19,7 +21,7 @@ def remove_punctuation(text: str) -> str:
     return re.sub(r'[^\w]', '', text, flags=re.UNICODE)
 
 
-async def delete_video(local_executable_path, account_file, minutes_ago, max_views):
+async def delete_video(local_executable_path, account_file, minutes_ago, max_views, video_title=None):
     async with async_playwright() as playwright:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(headless=False, executable_path=local_executable_path)
@@ -29,7 +31,7 @@ async def delete_video(local_executable_path, account_file, minutes_ago, max_vie
         # 创建一个新的页面
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com/platform/post/list",timeout=300000)
-        await delete_videos_by_conditions(page, minutes_ago=int(minutes_ago), max_views=int(max_views))
+        await delete_videos_by_conditions(page, minutes_ago=int(minutes_ago), max_views=int(max_views), video_title=video_title)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
@@ -53,7 +55,10 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
     if only_delete_fail:
         tencent_logger.info(f"[删除流程] 开始删除错误视频（仅删除 .post-processed-fail）")
     else:
-        tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 标题为{video_title} 且 页码为{page_index}")
+        if video_title:
+            tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 剧名为'{video_title}' 且 页码为{page_index}")
+        else:
+            tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 页码为{page_index}")
     try:
         start_time = time.time()
         timeout = 864000  # 5分钟超时
@@ -119,7 +124,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                             views_count = await views_element.text_content()
                             views_count = parse_view_count(views_count)
                             
-                            # 获取视频标题用于日志
+                            # 获取视频标题用于日志和比对
                             try:
                                 if await item.locator('.post-title').count()>0:
                                     title = await item.locator('.post-title').text_content()
@@ -134,25 +139,27 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                             tencent_logger.info(f"[删除流程] - 标题: {title}")
                             tencent_logger.info(f"[删除流程] - 发布时间: {post_time_str} ({time_diff:.0f}分钟前)")
                             tencent_logger.info(f"[删除流程] - 播放量: {views_count}")
-                            tencent_logger.info(f"[删除流程] - 条件比对: 时间>{minutes_ago}分钟 且 播放量<{max_views}")
-                            tencent_logger.info(f"[删除流程] - 实际数据: {time_diff:.0f}>{minutes_ago} 且 {views_count}<{max_views}")
-                            # 检查是否满足删除条件
+                            
+                            # 检查剧名是否匹配（如果设置了剧名）
+                            drama_name_match = True
                             if video_title:
-                                if title.startswith(video_title) and  minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and views_count < max_views:
-                                    should_delete = True
-                                    tencent_logger.info(f"[删除流程] => 符合删除条件")
-                            else :
-                                if  minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and views_count < max_views:
-                                    should_delete = True
-                                    tencent_logger.info(f"[删除流程] => 符合删除条件")
-                                else:
-                                    tencent_logger.info(f"[删除流程] => 不符合删除条件")
-                            item_title = item.locator('.post-title')
-                            if await item_title.count() > 0:
-                                title_text = await item_title.text_content()
-                                if title_text.startswith('waitdel-'):
-                                    should_delete = True
-                                    tencent_logger.info(f"[删除流程] => waitdel-视频符合删除条件")
+                                drama_name_match = (video_title in title) if title else False
+                                tencent_logger.info(f"[删除流程] - 剧名匹配: {drama_name_match} (标题包含'{video_title}')")
+                            
+                            tencent_logger.info(f"[删除流程] - 条件比对: 时间>={minutes_ago}分钟 且 播放量<{max_views}")
+                            tencent_logger.info(f"[删除流程] - 实际数据: {time_diff:.0f}>={minutes_ago} 且 {views_count}<{max_views}")
+                            
+                            # 检查是否满足删除条件
+                            if drama_name_match and minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and views_count < max_views:
+                                should_delete = True
+                                tencent_logger.info(f"[删除流程] => 符合删除条件")
+                            else:
+                                tencent_logger.info(f"[删除流程] => 不符合删除条件")
+                            
+                            # 特殊处理：以 waitdel- 开头的视频直接删除
+                            if title and title.startswith('waitdel-'):
+                                should_delete = True
+                                tencent_logger.info(f"[删除流程] => waitdel-视频符合删除条件")
                         else:
                             fail_video = await item.locator('.post-processed-fail').count()
                             if fail_video > 0:
@@ -474,3 +481,206 @@ async def add_comment(page, comment=None):
             tencent_logger.info(f"[评论流程] 评论发布完毕")
     except Exception as e:
         tencent_logger.exception(f"[评论流程] 评论视频时出错：{str(e)}")
+
+
+
+async def delete_videos_by_search_api(account_file, minutes_ago, max_views, video_title=None):
+    """
+    使用新的搜索API删除视频（手动删除专用）
+    :param account_file: cookie文件路径
+    :param minutes_ago: 多少分钟之前的视频
+    :param max_views: 最大播放量
+    :param video_title: 视频标题匹配（剧名），如果为None则不按剧名过滤
+    """
+    import requests
+    import aiofiles
+    
+    if not minutes_ago and not max_views:
+        tencent_logger.info("[手动删除-API] 未设置删除条件，跳过删除")
+        return
+    
+    if video_title:
+        tencent_logger.info(f"[手动删除-API] 开始使用搜索API删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 剧名包含'{video_title}'")
+    else:
+        tencent_logger.info(f"[手动删除-API] 开始使用搜索API删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views}")
+    
+    try:
+        # 从session文件读取cookie
+        async with aiofiles.open(account_file, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            session_data = json.loads(content)
+        
+        cookies_list = session_data.get('cookies', [])
+        sessionid = None
+        wxuin = None
+        for cookie in cookies_list:
+            if cookie['name'] == 'sessionid':
+                sessionid = cookie['value']
+            elif cookie['name'] == 'wxuin':
+                wxuin = cookie['value']
+        
+        if not sessionid or not wxuin:
+            tencent_logger.error('[手动删除-API] 无法获取sessionid或wxuin')
+            return
+        
+        # 导入删除函数
+        from social_auto_upload.uploader.tencent_uploader.main_tz_violation import delete_violation_video
+        
+        # 计算时间范围
+        current_time = datetime.now()
+        
+        # 构建请求
+        url = 'https://channels.weixin.qq.com/micro/content/cgi-bin/mmfinderassistant-bin/post/post_search_user_page'
+        
+        headers = {
+            'Accept': '*/*',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Connection': 'keep-alive',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
+            'X-WECHAT-UIN': wxuin,
+            'Referer': 'https://channels.weixin.qq.com/micro/content/post/list',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'finger-print-device-id': hashlib.md5(sessionid.encode()).hexdigest(),
+            'sec-ch-ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"'
+        }
+        
+        cookies = {'sessionid': sessionid, 'wxuin': wxuin}
+        
+        # 禁用SSL警告
+        import warnings
+        from urllib3.exceptions import InsecureRequestWarning
+        warnings.filterwarnings('ignore', category=InsecureRequestWarning)
+        
+        session = requests.Session()
+        
+        # 分页查询视频
+        last_buffer = ""
+        continue_flag = True
+        delete_success_count = 0
+        delete_fail_count = 0
+        page_count = 0
+        
+        while continue_flag:
+            page_count += 1
+            
+            # 构建请求数据
+            data = {
+                'wording': video_title if video_title else "",  # 搜索关键词（剧名）
+                'lastBuffer': last_buffer,
+                'continueFlag': False if not last_buffer else True,
+                'timestamp': str(int(time.time() * 1000)),
+                '_log_finder_uin': '',
+                '_log_finder_id': '',
+                'rawKeyBuff': '',
+                'pluginSessionId': None,
+                'scene': 7,
+                'reqScene': 7
+            }
+            
+            tencent_logger.info(f"[手动删除-API] 第{page_count}页: 请求数据 wording='{data['wording']}', lastBuffer={'有' if last_buffer else '无'}")
+            
+            # 使用 asyncio.to_thread 将同步请求转移到线程池
+            response = await asyncio.to_thread(
+                session.post, url, headers=headers, cookies=cookies, json=data, timeout=30, verify=False
+            )
+            
+            if response.status_code not in [200, 201]:
+                tencent_logger.error(f"[手动删除-API] 查询视频列表失败（第{page_count}页），状态码：{response.status_code}")
+                break
+            
+            result = response.json()
+            
+            if result.get('errCode') != 0:
+                tencent_logger.error(f"[手动删除-API] 视频列表API返回错误：{result.get('errMsg')}")
+                break
+            
+            data_obj = result.get('data', {})
+            video_list = data_obj.get('list', [])
+            last_buffer = data_obj.get('lastBuffer', '')
+            continue_flag = data_obj.get('continueFlag', False)
+            
+            if not video_list:
+                tencent_logger.info(f"[手动删除-API] 第{page_count}页无数据，查询完成")
+                break
+            
+            tencent_logger.info(f"[手动删除-API] 第{page_count}页: 获取 {len(video_list)} 个视频，continueFlag={continue_flag}")
+            
+            # 检查符合条件的视频并立即删除
+            for video in video_list:
+                create_time = video.get('createTime', 0)
+                read_count = video.get('readCount', 0)
+                export_id = video.get('exportId', '')
+                object_id = video.get('objectId', '')
+                
+                # 获取视频标题 - 优先从desc.component.title提取，再从desc.description提取
+                desc_obj = video.get('desc', {})
+                title = ''
+                
+                if isinstance(desc_obj, dict):
+                    # 优先从component.title提取
+                    component_obj = desc_obj.get('component', {})
+                    if isinstance(component_obj, dict):
+                        title = component_obj.get('title', '')
+                    
+                    # 如果component.title为空，从description提取
+                    if not title:
+                        title = desc_obj.get('description', '')
+                elif isinstance(desc_obj, str):
+                    # 兼容desc直接是字符串的情况
+                    title = desc_obj
+                
+                # 计算时间差（分钟）
+                video_time = datetime.fromtimestamp(create_time)
+                time_diff = (current_time - video_time).total_seconds() / 60
+                
+                # 记录详细的比对信息
+                tencent_logger.info(f"[手动删除-API] 视频信息比对:")
+                tencent_logger.info(f"[手动删除-API] - ObjectID: {object_id}")
+                tencent_logger.info(f"[手动删除-API] - 标题: {title}")
+                tencent_logger.info(f"[手动删除-API] - 发布时间: {video_time.strftime('%Y年%m月%d日 %H:%M')} ({time_diff:.0f}分钟前)")
+                tencent_logger.info(f"[手动删除-API] - 播放量: {read_count}")
+                
+                # 检查剧名是否匹配（如果设置了剧名）
+                drama_name_match = True
+                if video_title:
+                    drama_name_match = (video_title in title) if title else False
+                    tencent_logger.info(f"[手动删除-API] - 剧名匹配: {drama_name_match} (标题包含'{video_title}')")
+                
+                tencent_logger.info(f"[手动删除-API] - 条件比对: 时间>={minutes_ago}分钟 且 播放量<{max_views}")
+                tencent_logger.info(f"[手动删除-API] - 实际数据: {time_diff:.0f}>={minutes_ago} 且 {read_count}<{max_views}")
+                
+                # 检查是否符合删除条件
+                if drama_name_match and minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and read_count < max_views:
+                    tencent_logger.info(f"[手动删除-API] => 符合删除条件，立即删除")
+                    
+                    # 立即执行删除
+                    success = await delete_violation_video(export_id, account_file, sessionid, wxuin)
+                    if success:
+                        delete_success_count += 1
+                        tencent_logger.info(f"[手动删除-API] ✅ 删除成功 (已删除: {delete_success_count})")
+                    else:
+                        delete_fail_count += 1
+                        tencent_logger.error(f"[手动删除-API] ❌ 删除失败 (失败: {delete_fail_count})")
+                    
+                    # 使用 asyncio.sleep 避免请求过快
+                    await asyncio.sleep(1)
+                else:
+                    tencent_logger.info(f"[手动删除-API] => 不符合删除条件")
+            
+            # 如果没有下一页，停止循环
+            if not continue_flag:
+                tencent_logger.info(f"[手动删除-API] 已到最后一页，处理完成")
+                break
+            
+            # 翻页间隔
+            await asyncio.sleep(0.5)
+        
+        tencent_logger.info(f"[手动删除-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
+        
+    except Exception as e:
+        tencent_logger.exception(f"[手动删除-API] 删除视频时出错：{str(e)}")

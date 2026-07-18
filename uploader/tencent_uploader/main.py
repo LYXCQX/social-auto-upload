@@ -1161,7 +1161,8 @@ class TencentVideo(object):
                 await delete_videos_by_conditions(page, 
                     minutes_ago=self.info.get("delete_time_threshold", 1440), 
                     max_views=self.info.get("delete_play_threshold", 100),
-                    page_index=50)
+                    page_index=50,
+                    video_title=None)  # 自动删除时不按剧名过滤
         
         # 检查并处理违规视频（异步执行，不阻塞主流程）
         if self.info and self.info.get("delete_violation", False):
@@ -1470,7 +1471,7 @@ class TencentVideo(object):
                     read_count = video.get('readCount', 0)
                     export_id = video.get('exportId', '')
                     object_id = video.get('objectId', '')
-                    
+
                     # 如果有上次删除时间戳，遇到更早或相等的视频就停止
                     if last_delete_timestamp and create_time <= last_delete_timestamp:
                         tencent_logger.info(f"[删除流程-API] 遇到已处理的视频（发布时间：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(create_time))}），停止检查")
