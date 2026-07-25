@@ -4,6 +4,7 @@
 """
 import asyncio
 import time
+import hashlib
 from datetime import datetime
 
 from aiohttp import ThreadedResolver, TCPConnector
@@ -435,14 +436,131 @@ async def delete_violation_video(object_id, account_file=None, sessionid=None, w
         return False
 
 
-async def hide_violation_video(object_id, account_file=None, sessionid=None, wxuin=None):
-    """隐藏指定的违规视频（设置为仅自己可见） - 使用异步HTTP请求"""
+async def remove_from_collection(object_id, collection_id, account_file=None, sessionid=None, wxuin=None):
+    """从合集中移除视频 - 使用异步HTTP请求"""
+    import json
+    import aiohttp
+    
+    try:
+        tencent_logger.info("=" * 80)
+        tencent_logger.info(f"[合集管理] 开始从合集移除视频")
+        tencent_logger.info(f"[合集管理] - 视频ID: {object_id}")
+        tencent_logger.info(f"[合集管理] - 合集ID: {collection_id}")
+        tencent_logger.info("=" * 80)
+        
+        # 如果没有提供cookie，从session文件读取
+        if not sessionid or not wxuin:
+            if not account_file:
+                tencent_logger.error("[合集管理] 未提供cookie或session文件")
+                return False
+            
+            # 使用异步文件读取
+            import aiofiles
+            async with aiofiles.open(account_file, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                session_data = json.loads(content)
+            
+            cookies_list = session_data.get('cookies', [])
+            for cookie in cookies_list:
+                if cookie['name'] == 'sessionid':
+                    sessionid = cookie['value']
+                elif cookie['name'] == 'wxuin':
+                    wxuin = cookie['value']
+        
+        if not sessionid or not wxuin:
+            tencent_logger.error('[合集管理] 无法获取sessionid或wxuin')
+            return False
+        
+        # 调用合集管理接口
+        url = 'https://channels.weixin.qq.com/micro/content/cgi-bin/mmfinderassistant-bin/collection/mod_collection_feed'
+        
+        headers = {
+            'Accept': '*/*',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Connection': 'keep-alive',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
+            'X-WECHAT-UIN': wxuin,
+            'Referer': f'https://channels.weixin.qq.com/micro/content/collection/item',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'finger-print-device-id': hashlib.md5(sessionid.encode()).hexdigest(),
+            'sec-ch-ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"'
+        }
+        
+        cookies = {
+            'sessionid': sessionid,
+            'wxuin': wxuin
+        }
+        
+        data = {
+            'opType': 3,  # 3 = 从合集中移除
+            'collectionId': collection_id,
+            'objectInfo': [{'objectId': object_id}],
+            'collectionBusinessType': 0,
+            'timestamp': str(int(time.time() * 1000)),
+            '_log_finder_uin': '',
+            '_log_finder_id': '',
+            'rawKeyBuff': '',
+            'pluginSessionId': None,
+            'scene': 7,
+            'reqScene': 7
+        }
+        
+        tencent_logger.info(f"[合集管理] 请求URL: {url}")
+        tencent_logger.info(f"[合集管理] 请求Body: {json.dumps(data, ensure_ascii=False, indent=2)}")
+        
+        # 使用 aiohttp 进行异步HTTP请求
+        connector = aiohttp.TCPConnector(ssl=False)
+        timeout = aiohttp.ClientTimeout(total=30)
+        resolver = ThreadedResolver()
+        connector = TCPConnector(resolver=resolver, ssl=False)
+        
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
+                tencent_logger.info(f"[合集管理] 响应状态码: {response.status}")
+                
+                if response.status in [200, 201]:
+                    result = await response.json()
+                    tencent_logger.info(f"[合集管理] 响应Body: {json.dumps(result, ensure_ascii=False, indent=2)}")
+                    
+                    if result.get('errCode') == 0:
+                        tencent_logger.info(f"[合集管理] ✅ 从合集移除视频成功")
+                        tencent_logger.info("=" * 80)
+                        return True
+                    else:
+                        tencent_logger.error(f"[合集管理] ❌ 从合集移除失败 - errCode: {result.get('errCode')}, errMsg: {result.get('errMsg')}")
+                        tencent_logger.info("=" * 80)
+                        return False
+                else:
+                    tencent_logger.error(f"[合集管理] ❌ 请求失败，状态码: {response.status}")
+                    response_text = await response.text()
+                    tencent_logger.error(f"[合集管理] 响应内容: {response_text[:500]}")
+                    tencent_logger.info("=" * 80)
+                    return False
+            
+    except Exception as e:
+        tencent_logger.exception(f"[合集管理] 从合集移除视频异常: {str(e)}")
+        tencent_logger.info("=" * 80)
+        return False
+
+
+async def hide_violation_video(object_id, account_file=None, sessionid=None, wxuin=None, collection_id=None):
+    """隐藏指定的违规视频（设置为仅自己可见） - 使用异步HTTP请求
+    
+    如果视频在合集中，会先从合集中移除，再隐藏视频
+    """
     import json
     import aiohttp
     
     try:
         tencent_logger.info("=" * 80)
         tencent_logger.info(f"[违规处理-隐藏] 开始隐藏视频: {object_id}")
+        if collection_id:
+            tencent_logger.info(f"[违规处理-隐藏] 视频在合集中: {collection_id}")
         tencent_logger.info("=" * 80)
         
         # 如果没有提供cookie，从session文件读取
@@ -469,7 +587,25 @@ async def hide_violation_video(object_id, account_file=None, sessionid=None, wxu
             tencent_logger.error('[违规处理-隐藏] 无法获取sessionid或wxuin')
             return False
         
+        # 如果视频在合集中，先从合集移除
+        if collection_id:
+            tencent_logger.info("[违规处理-隐藏] 第一步：从合集中移除视频")
+            remove_success = await remove_from_collection(
+                object_id=object_id,
+                collection_id=collection_id,
+                account_file=account_file,
+                sessionid=sessionid,
+                wxuin=wxuin
+            )
+            
+            if not remove_success:
+                tencent_logger.warning("[违规处理-隐藏] ⚠️ 从合集移除失败，但继续尝试隐藏视频")
+            else:
+                tencent_logger.info("[违规处理-隐藏] ✅ 已从合集移除，等待1秒后隐藏视频")
+                await asyncio.sleep(1)
+        
         # 调用隐藏接口（设置为仅自己可见）
+        tencent_logger.info("[违规处理-隐藏] 第二步：隐藏视频（设置为仅自己可见）")
         url = 'https://channels.weixin.qq.com/micro/content/cgi-bin/mmfinderassistant-bin/post/post_update_visible'
         
         headers = {
@@ -822,11 +958,20 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 export_id = video.get('exportId', '')  # export/ 格式的ID
                 visible_type = video.get('visibleType', 1)  # 1=公开, 3=仅自己可见
                 
+                # 获取合集信息
+                desc_obj = video.get('desc', {})
+                topic_obj = desc_obj.get('topic', {}) if isinstance(desc_obj, dict) else {}
+                collection_id = topic_obj.get('collectionId', '') if isinstance(topic_obj, dict) else ''
+                collection_name = topic_obj.get('collectionName', '') if isinstance(topic_obj, dict) else ''
+                
                 tencent_logger.info(f"[违规处理] 找到匹配视频 (匹配方式: {used_match_method})")
                 tencent_logger.info(f"[违规处理] Object ID: {video_object_id}")
                 tencent_logger.info(f"[违规处理] Export ID: {export_id}")
                 tencent_logger.info(f"[违规处理] 真实播放量: {read_count}")
                 tencent_logger.info(f"[违规处理] 可见性: {visible_type} (1=公开, 3=仅自己可见)")
+                if collection_id:
+                    tencent_logger.info(f"[违规处理] 合集ID: {collection_id}")
+                    tencent_logger.info(f"[违规处理] 合集名称: {collection_name}")
                 
                 # 根据真实播放量判断并执行操作
                 if read_count < violation_delete_views:
@@ -849,8 +994,14 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                         already_hidden_count += 1
                     else:
                         tencent_logger.warning(f"[违规处理] 🔒 满足隐藏条件（{read_count} >= {violation_hide_views}）")
-                        # 执行隐藏（使用 exportId）
-                        success = await hide_violation_video(export_id, account_file, sessionid, wxuin)
+                        # 执行隐藏（使用 exportId，如果在合集中会先移除）
+                        success = await hide_violation_video(
+                            object_id=export_id,
+                            account_file=account_file,
+                            sessionid=sessionid,
+                            wxuin=wxuin,
+                            collection_id=collection_id if collection_id else None
+                        )
                         await asyncio.sleep(1.5)  # 避免请求过快
                         if success:
                             hide_count += 1
