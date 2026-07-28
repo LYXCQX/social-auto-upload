@@ -788,7 +788,16 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         tencent_logger.info(f"[违规处理] ⏸️  暂不处理: {total_skip_count} 个")
         tencent_logger.info(f"[违规处理] 🔍 未找到视频: {total_not_found_count} 个")
         tencent_logger.info("=" * 80)
-        return
+        
+        # 返回汇总结果
+        return {
+            'delete_count': total_delete_count,
+            'hide_count': total_hide_count,
+            'skip_count': total_skip_count,
+            'not_found_count': total_not_found_count,
+            'already_hidden_count': total_already_hidden_count,
+            'violation_videos_count': total_violation_videos
+        }
     
     # 如果未超过15天，按原逻辑处理
     batch_result = await _process_violation_batch(
@@ -814,6 +823,8 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         tencent_logger.info(f"[违规处理] ⏸️  暂不处理: {batch_result.get('skip_count', 0)} 个")
         tencent_logger.info(f"[违规处理] 🔍 未找到视频: {batch_result.get('not_found_count', 0)} 个")
         tencent_logger.info("=" * 60)
+    
+    return batch_result
 
 
 async def _process_violation_batch(account_file, violation_delete_days, violation_delete_views,
