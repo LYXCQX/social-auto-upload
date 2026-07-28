@@ -144,7 +144,7 @@ async def get_post_list_by_date_with_early_stop_async(session, headers, cookies,
         timestamp = violation.get('publish_timestamp', 0)
         if object_id:
             target_object_ids.add(object_id)
-        if timestamp:
+        elif timestamp:
             target_timestamps.add(timestamp)
     
     matched_count = 0
@@ -277,7 +277,8 @@ async def find_videos_by_object_id_and_time_async(session, headers, cookies, vio
         
         if object_id:
             object_id_to_video[object_id] = video
-        if create_time:
+        elif create_time:
+            print(video)
             time_to_video[create_time] = video
     
     tencent_logger.info(f"[违规处理] 构建了 {len(object_id_to_video)} 个objectId索引，{len(time_to_video)} 个时间索引")
