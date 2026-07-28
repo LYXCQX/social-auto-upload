@@ -708,11 +708,151 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
     else:
         tencent_logger.info("[违规处理] 首次检查违规，无历史时间戳")
     
+    # 判断是否需要分批处理（超过15天）
+    MAX_BATCH_DAYS = 15
+    if violation_delete_days > MAX_BATCH_DAYS:
+        tencent_logger.info("=" * 60)
+        tencent_logger.info(f"[违规处理] 时间跨度超过{MAX_BATCH_DAYS}天，启用分批处理模式")
+        tencent_logger.info("=" * 60)
+        
+        # 计算需要分几批
+        num_batches = (violation_delete_days + MAX_BATCH_DAYS - 1) // MAX_BATCH_DAYS
+        tencent_logger.info(f"[违规处理] 总天数: {violation_delete_days}天，将分为 {num_batches} 批处理")
+        
+        # 统计所有批次的总数
+        total_delete_count = 0
+        total_hide_count = 0
+        total_skip_count = 0
+        total_not_found_count = 0
+        total_already_hidden_count = 0
+        total_violation_videos = 0
+        
+        # 从最新的时间段开始处理
+        current_timestamp = int(time.time())
+        
+        for batch_idx in range(num_batches):
+            # 计算当前批次的天数
+            if batch_idx == num_batches - 1:
+                # 最后一批处理剩余的天数
+                batch_days = violation_delete_days - (batch_idx * MAX_BATCH_DAYS)
+            else:
+                batch_days = MAX_BATCH_DAYS
+            
+            tencent_logger.info("=" * 80)
+            tencent_logger.info(f"[违规处理] 开始处理第 {batch_idx + 1}/{num_batches} 批")
+            tencent_logger.info(f"[违规处理] 当前批次处理天数: {batch_days}天")
+            tencent_logger.info("=" * 80)
+            
+            # 递归调用自身处理当前批次（传入调整后的天数）
+            batch_result = await _process_violation_batch(
+                account_file=account_file,
+                violation_delete_days=batch_days,
+                violation_delete_views=violation_delete_views,
+                violation_hide_views=violation_hide_views,
+                user_id=user_id,
+                last_check_timestamp=last_check_timestamp,
+                batch_info=f"第{batch_idx + 1}/{num_batches}批"
+            )
+            
+            # 累加统计结果
+            if batch_result:
+                total_delete_count += batch_result.get('delete_count', 0)
+                total_hide_count += batch_result.get('hide_count', 0)
+                total_skip_count += batch_result.get('skip_count', 0)
+                total_not_found_count += batch_result.get('not_found_count', 0)
+                total_already_hidden_count += batch_result.get('already_hidden_count', 0)
+                total_violation_videos += batch_result.get('violation_videos_count', 0)
+                
+                tencent_logger.info(f"[违规处理] 第 {batch_idx + 1}/{num_batches} 批处理完成")
+                tencent_logger.info(f"[违规处理] 本批删除: {batch_result.get('delete_count', 0)} 个，隐藏: {batch_result.get('hide_count', 0)} 个")
+                
+                # 如果遇到删除频率限制，则停止后续批次
+                if batch_result.get('rate_limited', False):
+                    tencent_logger.warning(f"[违规处理] 遇到删除频率限制，停止后续批次处理")
+                    break
+            
+            # 批次之间暂停2秒
+            if batch_idx < num_batches - 1:
+                tencent_logger.info(f"[违规处理] 批次间隔等待2秒...")
+                await asyncio.sleep(2)
+        
+        # 输出总的汇总结果
+        tencent_logger.info("=" * 80)
+        tencent_logger.info("[违规处理] ✅ 所有批次处理完成 - 总体结果汇总")
+        tencent_logger.info("=" * 80)
+        tencent_logger.info(f"[违规处理] 总共发现违规视频: {total_violation_videos} 个")
+        tencent_logger.info(f"[违规处理] ")
+        tencent_logger.info(f"[违规处理] ❌ 已删除: {total_delete_count} 个（播放量 < {violation_delete_views}）")
+        tencent_logger.info(f"[违规处理] 🔒 已隐藏: {total_hide_count} 个（播放量 >= {violation_hide_views}）")
+        tencent_logger.info(f"[违规处理] ⏭️  已是隐藏状态: {total_already_hidden_count} 个（跳过）")
+        tencent_logger.info(f"[违规处理] ⏸️  暂不处理: {total_skip_count} 个")
+        tencent_logger.info(f"[违规处理] 🔍 未找到视频: {total_not_found_count} 个")
+        tencent_logger.info("=" * 80)
+        return
+    
+    # 如果未超过15天，按原逻辑处理
+    batch_result = await _process_violation_batch(
+        account_file=account_file,
+        violation_delete_days=violation_delete_days,
+        violation_delete_views=violation_delete_views,
+        violation_hide_views=violation_hide_views,
+        user_id=user_id,
+        last_check_timestamp=last_check_timestamp,
+        batch_info="单批次"
+    )
+    
+    # 输出结果
+    if batch_result:
+        tencent_logger.info("=" * 60)
+        tencent_logger.info("[违规处理] ✅ 处理完成 - 最终结果")
+        tencent_logger.info("=" * 60)
+        tencent_logger.info(f"[违规处理] 发现违规视频: {batch_result.get('violation_videos_count', 0)} 个")
+        tencent_logger.info(f"[违规处理] ")
+        tencent_logger.info(f"[违规处理] ❌ 已删除: {batch_result.get('delete_count', 0)} 个（播放量 < {violation_delete_views}）")
+        tencent_logger.info(f"[违规处理] 🔒 已隐藏: {batch_result.get('hide_count', 0)} 个（播放量 >= {violation_hide_views}）")
+        tencent_logger.info(f"[违规处理] ⏭️  已是隐藏状态: {batch_result.get('already_hidden_count', 0)} 个（跳过）")
+        tencent_logger.info(f"[违规处理] ⏸️  暂不处理: {batch_result.get('skip_count', 0)} 个")
+        tencent_logger.info(f"[违规处理] 🔍 未找到视频: {batch_result.get('not_found_count', 0)} 个")
+        tencent_logger.info("=" * 60)
+
+
+async def _process_violation_batch(account_file, violation_delete_days, violation_delete_views,
+                                   violation_hide_views, user_id=None, last_check_timestamp=None, batch_info=""):
+    """处理单批次的违规视频（内部函数）
+    
+    Args:
+        account_file: session文件路径
+        violation_delete_days: 检查天数
+        violation_delete_views: 删除播放量阈值
+        violation_hide_views: 隐藏播放量阈值
+        user_id: 用户ID，用于更新数据库
+        last_check_timestamp: 最后检查时间戳，避免重复处理
+        batch_info: 批次信息（用于日志）
+    
+    Returns:
+        dict: 包含统计结果的字典
+    """
+    import json
+    import aiohttp
+    
     tencent_logger.info("=" * 60)
+    tencent_logger.info(f"[违规处理-{batch_info}] 开始处理")
+    tencent_logger.info("=" * 60)
+    
+    # 用于返回的统计结果
+    result_stats = {
+        'delete_count': 0,
+        'hide_count': 0,
+        'skip_count': 0,
+        'not_found_count': 0,
+        'already_hidden_count': 0,
+        'violation_videos_count': 0,
+        'rate_limited': False  # 是否遇到删除频率限制
+    }
     
     try:
         # 从session文件读取cookie
-        tencent_logger.info(f"[违规处理] 从session文件读取cookie: {account_file}")
+        tencent_logger.info(f"[违规处理-{batch_info}] 从session文件读取cookie: {account_file}")
         
         # ✅ 使用异步文件读取
         import aiofiles
@@ -733,11 +873,11 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 wxuin = cookie['value']
         
         if not sessionid or not wxuin:
-            tencent_logger.error('[违规处理] 未找到sessionid或wxuin')
-            return
+            tencent_logger.error(f'[违规处理-{batch_info}] 未找到sessionid或wxuin')
+            return result_stats
         
-        tencent_logger.info(f'[违规处理] 成功读取cookie (sessionid长度: {len(sessionid)}, wxuin: {wxuin})')
-        tencent_logger.info('[违规处理] 正在请求通知列表...')
+        tencent_logger.info(f'[违规处理-{batch_info}] 成功读取cookie (sessionid长度: {len(sessionid)}, wxuin: {wxuin})')
+        tencent_logger.info(f'[违规处理-{batch_info}] 正在请求通知列表...')
         
         # 构造请求
         url = 'https://channels.weixin.qq.com/cgi-bin/mmfinderassistant-bin/notification/notification_list'
@@ -766,7 +906,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         time_range_seconds = violation_delete_days * 24 * 60 * 60
         oldest_allowed_timestamp = current_timestamp - time_range_seconds
         
-        tencent_logger.info(f"[违规处理] 时间过滤：只处理 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(oldest_allowed_timestamp))} 之后的通知")
+        tencent_logger.info(f"[违规处理-{batch_info}] 时间过滤：只处理 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(oldest_allowed_timestamp))} 之后的通知")
         
         resolver = ThreadedResolver()  # 使用线程池进行DNS解析，避免Windows异步DNS问题
         connector = aiohttp.TCPConnector(resolver=resolver, ssl=False)
@@ -774,14 +914,14 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             async with session.post(url, headers=headers, cookies=cookies, json=data) as response:
                 if response.status not in [200, 201]:
-                    tencent_logger.error(f'[违规处理] 请求失败，状态码：{response.status}')
-                    return
+                    tencent_logger.error(f'[违规处理-{batch_info}] 请求失败，状态码：{response.status}')
+                    return result_stats
                 
                 result = await response.json()
                 
                 if result.get('errCode') != 0:
-                    tencent_logger.error(f'[违规处理] API返回错误：{result.get("errMsg")}')
-                    return
+                    tencent_logger.error(f'[违规处理-{batch_info}] API返回错误：{result.get("errMsg")}')
+                    return result_stats
                 
                 # 获取数据
                 data_obj = result.get('data', {})
@@ -791,8 +931,8 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 notification_list = []
                 current_page = 1
                 
-                tencent_logger.info(f"[违规处理] 总通知数：{total_count}")
-                tencent_logger.info(f"[违规处理] 第{current_page}页获取：{len(page_list)} 条")
+                tencent_logger.info(f"[违规处理-{batch_info}] 总通知数：{total_count}")
+                tencent_logger.info(f"[违规处理-{batch_info}] 第{current_page}页获取：{len(page_list)} 条")
                 
                 # 检查第一页是否有符合时间范围的通知
                 page_has_valid_notifications = False
@@ -804,14 +944,14 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                     
                     # 如果有上次检查时间戳，只处理比它新的通知
                     if last_check_timestamp and notification_timestamp <= last_check_timestamp:
-                        tencent_logger.info(f"[违规处理] 通知时间戳 {notification_timestamp} <= 上次检查时间戳 {last_check_timestamp}，已处理过，停止检查")
+                        tencent_logger.info(f"[违规处理-{batch_info}] 通知时间戳 {notification_timestamp} <= 上次检查时间戳 {last_check_timestamp}，已处理过，停止检查")
                         break
                     
                     if notification_timestamp >= oldest_allowed_timestamp:
                         notification_list.append(notification)
                         page_has_valid_notifications = True
                 
-                tencent_logger.info(f"[违规处理] 第{current_page}页符合时间范围：{len(notification_list)} 条")
+                tencent_logger.info(f"[违规处理-{batch_info}] 第{current_page}页符合时间范围：{len(notification_list)} 条")
                 
                 # 如果遇到了上次检查的时间戳，不再翻页
                 if last_check_timestamp and page_list:
@@ -893,20 +1033,22 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                         tencent_logger.error(f'[违规处理] 第{current_page}页请求异常：{str(e)}')
                         break
                 
-                tencent_logger.info(f"[违规处理] 通知列表获取完成：共获取 {current_page} 页，筛选出 {len(notification_list)} 条符合时间范围的通知（总数：{total_count}）")
+                tencent_logger.info(f"[违规处理-{batch_info}] 通知列表获取完成：共获取 {current_page} 页，筛选出 {len(notification_list)} 条符合时间范围的通知（总数：{total_count}）")
                 
                 # 第一步：收集所有优化建议视频
                 tencent_logger.info("=" * 60)
-                tencent_logger.info("[违规处理] 第一步：收集所有优化建议视频")
+                tencent_logger.info(f"[违规处理-{batch_info}] 第一步：收集所有优化建议视频")
                 tencent_logger.info("=" * 60)
                 
                 violation_videos = collect_violation_videos(notification_list)
                 
-                tencent_logger.info(f"[违规处理] 收集结果：发现 {len(violation_videos)} 个违规视频")
+                result_stats['violation_videos_count'] = len(violation_videos)
+                
+                tencent_logger.info(f"[违规处理-{batch_info}] 收集结果：发现 {len(violation_videos)} 个违规视频")
                 
                 if not violation_videos:
-                    tencent_logger.info("[违规处理] 未找到任何违规视频，无需继续处理")
-                    return
+                    tencent_logger.info(f"[违规处理-{batch_info}] 未找到任何违规视频，无需继续处理")
+                    return result_stats
                 
                 # 显示收集到的视频列表
                 for idx, v in enumerate(violation_videos, 1):
@@ -918,7 +1060,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 
                 # 第二步：按时间区间查询所有视频
                 tencent_logger.info("=" * 60)
-                tencent_logger.info("[违规处理] 第二步：按时间区间查询所有视频（自动翻页）")
+                tencent_logger.info(f"[违规处理-{batch_info}] 第二步：按时间区间查询所有视频（自动翻页）")
                 tencent_logger.info("=" * 60)
                 
                 # ✅ 调用异步版本的查询函数
@@ -926,7 +1068,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         
         # 第三步：对比数据并执行逻辑
         tencent_logger.info("=" * 60)
-        tencent_logger.info("[违规处理] 第三步：对比数据并执行判断逻辑")
+        tencent_logger.info(f"[违规处理-{batch_info}] 第三步：对比数据并执行判断逻辑")
         tencent_logger.info("=" * 60)
         
         delete_count = 0
@@ -934,6 +1076,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         skip_count = 0
         not_found_count = 0
         already_hidden_count = 0
+        rate_limited = False  # 是否遇到删除频率限制
         
         for idx, violation in enumerate(violation_videos, 1):
             video_title = violation['video_title']
@@ -976,17 +1119,19 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 
                 # 根据真实播放量判断并执行操作
                 if read_count < violation_delete_views:
-                    tencent_logger.warning(f"[违规处理] ❌ 满足删除条件（{read_count} < {violation_delete_views}）")
+                    tencent_logger.warning(f"[违规处理-{batch_info}] ❌ 满足删除条件（{read_count} < {violation_delete_views}）")
                     # 执行删除（使用 exportId）
                     success,errmsg = await delete_violation_video(export_id, account_file, sessionid, wxuin)
                     await asyncio.sleep(1.5)  # 避免请求过快
                     if success:
                         delete_count += 1
-                        tencent_logger.info(f"[违规处理] 删除成功")
+                        tencent_logger.info(f"[违规处理-{batch_info}] 删除成功")
                     else:
                         if errmsg =='暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                            tencent_logger.error(f"[违规处理-{batch_info}] ⚠️ 遇到删除频率限制，停止后续处理")
+                            rate_limited = True
                             break
-                        tencent_logger.error(f"[违规处理] 删除失败")
+                        tencent_logger.error(f"[违规处理-{batch_info}] 删除失败")
                         
                 elif read_count >= violation_hide_views:
                     # 检查是否已经隐藏
@@ -1017,18 +1162,26 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 tencent_logger.warning(f"[违规处理] 未找到匹配的视频（可能已删除或时间范围外）")
                 not_found_count += 1
         
-        # 汇总结果
+        # 更新结果统计
+        result_stats['delete_count'] = delete_count
+        result_stats['hide_count'] = hide_count
+        result_stats['skip_count'] = skip_count
+        result_stats['not_found_count'] = not_found_count
+        result_stats['already_hidden_count'] = already_hidden_count
+        result_stats['rate_limited'] = rate_limited
+        
+        # 汇总结果（批次信息）
         tencent_logger.info("=" * 60)
-        tencent_logger.info("[违规处理] 最终结果汇总")
+        tencent_logger.info(f"[违规处理-{batch_info}] 批次结果汇总")
         tencent_logger.info("=" * 60)
-        tencent_logger.info(f"[违规处理] 发现优化建议视频: {len(violation_videos)} 个")
-        tencent_logger.info(f"[违规处理] 成功匹配视频: {len(matched_videos)} 个")
-        tencent_logger.info(f"[违规处理] 未找到视频: {not_found_count} 个")
-        tencent_logger.info(f"[违规处理] ")
-        tencent_logger.info(f"[违规处理] 已删除: {delete_count} 个（播放量 < {violation_delete_views}）")
-        tencent_logger.info(f"[违规处理] 已隐藏: {hide_count} 个（播放量 >= {violation_hide_views}）")
-        tencent_logger.info(f"[违规处理] 已是隐藏状态: {already_hidden_count} 个（跳过）")
-        tencent_logger.info(f"[违规处理] 暂不处理: {skip_count} 个")
+        tencent_logger.info(f"[违规处理-{batch_info}] 发现优化建议视频: {len(violation_videos)} 个")
+        tencent_logger.info(f"[违规处理-{batch_info}] 成功匹配视频: {len(matched_videos)} 个")
+        tencent_logger.info(f"[违规处理-{batch_info}] 未找到视频: {not_found_count} 个")
+        tencent_logger.info(f"[违规处理-{batch_info}] ")
+        tencent_logger.info(f"[违规处理-{batch_info}] 已删除: {delete_count} 个（播放量 < {violation_delete_views}）")
+        tencent_logger.info(f"[违规处理-{batch_info}] 已隐藏: {hide_count} 个（播放量 >= {violation_hide_views}）")
+        tencent_logger.info(f"[违规处理-{batch_info}] 已是隐藏状态: {already_hidden_count} 个（跳过）")
+        tencent_logger.info(f"[违规处理-{batch_info}] 暂不处理: {skip_count} 个")
         tencent_logger.info("=" * 60)
         
         # 更新用户的最后检查时间戳
@@ -1040,9 +1193,12 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
                 
                 # 更新最后检查时间戳
                 db_manager.update_user(user_id, {'last_violation_check_timestamp': newest_notification_timestamp})
-                tencent_logger.info(f"[违规处理] ✅ 已更新最后检查时间戳: {newest_notification_timestamp} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(newest_notification_timestamp))})")
+                tencent_logger.info(f"[违规处理-{batch_info}] ✅ 已更新最后检查时间戳: {newest_notification_timestamp} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(newest_notification_timestamp))})")
             except Exception as e:
-                tencent_logger.warning(f"[违规处理] 更新最后检查时间戳失败: {str(e)}")
+                tencent_logger.warning(f"[违规处理-{batch_info}] 更新最后检查时间戳失败: {str(e)}")
+        
+        return result_stats
         
     except Exception as e:
-        tencent_logger.exception(f"[违规处理] 处理过程出错: {str(e)}")
+        tencent_logger.exception(f"[违规处理-{batch_info}] 处理过程出错: {str(e)}")
+        return result_stats
