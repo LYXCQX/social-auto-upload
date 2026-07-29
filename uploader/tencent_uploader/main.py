@@ -1509,10 +1509,23 @@ class TencentVideo(object):
                             delete_success_count += 1
                             tencent_logger.info(f"[删除流程-API] ✅ 删除成功 (已删除: {delete_success_count})")
                         else:
-                            if errmsg =='暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
-                                break
+                            # 检查是否是删除频率限制
+                            if errmsg == '暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                                tencent_logger.error(f"[删除流程-API] ⚠️ 遇到删除频率限制，停止后续处理")
+                                tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个（遇到频率限制）")
+                                # 更新用户时间戳后退出
+                                if user_id and first_video_timestamp:
+                                    try:
+                                        from db_manager import get_db_manager
+                                        db_manager = get_db_manager()
+                                        db_manager.update_user(user_id, {'last_delete_video_timestamp': first_video_timestamp})
+                                        tencent_logger.info(f"[删除流程-API] ✅ 已更新最后删除视频时间戳: {first_video_timestamp}")
+                                    except:
+                                        pass
+                                return  # 立即结束函数
+                            
                             delete_fail_count += 1
-                            tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count})")
+                            tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count}): {errmsg}")
                         
                         should_continue = True
                     else:

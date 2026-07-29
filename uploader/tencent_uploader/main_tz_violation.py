@@ -447,31 +447,38 @@ async def delete_violation_video(object_id, account_file=None, sessionid=None, w
                 except:
                     response_text = await response.text()
                     tencent_logger.warning(f"[违规处理-删除] 响应Body (非JSON): {response_text[:500]}")
-                errmsg = '删除成功'
+
                 if response.status in [200, 201]:
                     result = await response.json()
                     if result.get('errCode') == 0:
+                        # 检查是否是删除频率限制
+                        res_data = result.get('data', {})
+                        baseResp = res_data.get('baseResp', {})
+                        base_errmsg = baseResp.get('errmsg', '')
+                        
+                        if base_errmsg == '暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                            tencent_logger.error(f"[违规处理-删除] ❌ 遇到删除频率限制: {base_errmsg}")
+                            tencent_logger.info("=" * 80)
+                            return False, base_errmsg
+                        
                         tencent_logger.info(f"[违规处理-删除] ✅ 视频删除成功: {object_id}")
                         tencent_logger.info("=" * 80)
-                        res_data = result.get('data')
-                        if res_data:
-                            baseResp = res_data.get('baseResp')
-                            if baseResp:
-                                errmsg = res_data.get('errmsg')
-                        return True,errmsg
+                        return True, '删除成功'
                     else:
-                        tencent_logger.error(f"[违规处理-删除] ❌ 删除失败 - errCode: {result.get('errCode')}, errMsg: {result.get('errMsg')}")
+                        errmsg = result.get('errMsg', '删除失败')
+                        tencent_logger.error(f"[违规处理-删除] ❌ 删除失败 - errCode: {result.get('errCode')}, errMsg: {errmsg}")
                         tencent_logger.info("=" * 80)
-                        return False,errmsg
+                        return False, errmsg
                 else:
+                    errmsg = f'HTTP状态码: {response.status}'
                     tencent_logger.error(f"[违规处理-删除] ❌ 删除请求失败，状态码: {response.status}")
                     tencent_logger.info("=" * 80)
-                    return False,errmsg
+                    return False, errmsg
             
     except Exception as e:
         tencent_logger.exception(f"[违规处理-删除] 删除视频异常: {str(e)}")
         tencent_logger.info("=" * 80)
-        return False
+        return False, str(e)
 
 
 async def remove_from_collection(object_id, collection_id, account_file=None, sessionid=None, wxuin=None):
