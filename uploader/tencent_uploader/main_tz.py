@@ -484,13 +484,14 @@ async def add_comment(page, comment=None):
 
 
 
-async def delete_videos_by_search_api(account_file, minutes_ago, max_views, video_title=None):
+async def delete_videos_by_search_api(account_file, minutes_ago, max_views, video_title=None, process_interval=0):
     """
     使用新的搜索API删除视频（手动删除专用）
     :param account_file: cookie文件路径
     :param minutes_ago: 多少分钟之前的视频
     :param max_views: 最大播放量
     :param video_title: 视频标题匹配（剧名），如果为None则不按剧名过滤
+    :param process_interval: 处理间隔（秒）
     """
     import requests
     import aiofiles
@@ -503,6 +504,8 @@ async def delete_videos_by_search_api(account_file, minutes_ago, max_views, vide
         tencent_logger.info(f"[手动删除-API] 开始使用搜索API删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 剧名包含'{video_title}'")
     else:
         tencent_logger.info(f"[手动删除-API] 开始使用搜索API删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views}")
+    
+    tencent_logger.info(f"[手动删除-API] 处理间隔: {process_interval}秒")
     
     try:
         # 从session文件读取cookie
@@ -660,15 +663,20 @@ async def delete_videos_by_search_api(account_file, minutes_ago, max_views, vide
                     
                     # 立即执行删除
                     success = await delete_violation_video(export_id, account_file, sessionid, wxuin)
+                    
+                    # 使用配置的处理间隔
+                    if process_interval > 0:
+                        tencent_logger.info(f"[手动删除-API] 等待处理间隔 {process_interval} 秒...")
+                        await asyncio.sleep(process_interval)
+                    else:
+                        await asyncio.sleep(1)  # 默认间隔
+                    
                     if success:
                         delete_success_count += 1
                         tencent_logger.info(f"[手动删除-API] ✅ 删除成功 (已删除: {delete_success_count})")
                     else:
                         delete_fail_count += 1
                         tencent_logger.error(f"[手动删除-API] ❌ 删除失败 (失败: {delete_fail_count})")
-                    
-                    # 使用 asyncio.sleep 避免请求过快
-                    await asyncio.sleep(1)
                 else:
                     tencent_logger.info(f"[手动删除-API] => 不符合删除条件")
             

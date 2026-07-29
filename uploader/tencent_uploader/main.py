@@ -1496,7 +1496,15 @@ class TencentVideo(object):
                         
                         # 立即执行删除
                         success,errmsg = await delete_violation_video(export_id, self.account_file, sessionid, wxuin)
-                        await asyncio.sleep(1.5)  # 避免请求过快
+                        
+                        # 使用配置的处理间隔
+                        process_interval = self.info.get("violation_process_interval", 0)
+                        if process_interval > 0:
+                            tencent_logger.info(f"[删除流程-API] 等待处理间隔 {process_interval} 秒...")
+                            await asyncio.sleep(process_interval)
+                        else:
+                            await asyncio.sleep(1.5)  # 默认间隔，避免请求过快
+                        
                         if success:
                             delete_success_count += 1
                             tencent_logger.info(f"[删除流程-API] ✅ 删除成功 (已删除: {delete_success_count})")
@@ -1506,8 +1514,6 @@ class TencentVideo(object):
                             delete_fail_count += 1
                             tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count})")
                         
-                        # ✅ 使用 asyncio.sleep 替代 time.sleep
-                        await asyncio.sleep(1)  # 避免请求过快
                         should_continue = True
                     else:
                         tencent_logger.info(f"[删除流程-API] => 不符合删除条件")

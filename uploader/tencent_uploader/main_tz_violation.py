@@ -718,7 +718,7 @@ async def hide_violation_video(object_id, account_file=None, sessionid=None, wxu
 
 
 async def check_and_handle_violation(account_file, violation_delete_days, violation_delete_views,
-                                     violation_hide_views, user_id=None, last_check_timestamp=None):
+                                     violation_hide_views, user_id=None, last_check_timestamp=None, process_interval=0):
     """检查并处理违规视频
     
     Args:
@@ -728,6 +728,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         violation_hide_views: 隐藏播放量阈值
         user_id: 用户ID，用于更新数据库
         last_check_timestamp: 最后检查时间戳，避免重复处理
+        process_interval: 处理间隔（秒），用于删除和隐藏操作之间的等待
     """
     import json
     import aiohttp
@@ -738,6 +739,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
     tencent_logger.info(f"[违规处理] 检查范围: 最近{violation_delete_days}天")
     tencent_logger.info(f"[违规处理] 删除条件: 播放量 < {violation_delete_views}")
     tencent_logger.info(f"[违规处理] 隐藏条件: 播放量 >= {violation_hide_views}")
+    tencent_logger.info(f"[违规处理] 处理间隔: {process_interval}秒")
     
     # 使用传入的最后检查时间戳
     if last_check_timestamp:
@@ -753,7 +755,8 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
         violation_hide_views=violation_hide_views,
         user_id=user_id,
         last_check_timestamp=last_check_timestamp,
-        batch_info="处理中"
+        batch_info="处理中",
+        process_interval=process_interval
     )
     
     # 输出结果
@@ -774,7 +777,7 @@ async def check_and_handle_violation(account_file, violation_delete_days, violat
 
 
 async def _process_violation_batch(account_file, violation_delete_days, violation_delete_views,
-                                   violation_hide_views, user_id=None, last_check_timestamp=None, batch_info=""):
+                                   violation_hide_views, user_id=None, last_check_timestamp=None, batch_info="", process_interval=0):
     """处理单批次的违规视频（内部函数）
     
     Args:
@@ -785,6 +788,7 @@ async def _process_violation_batch(account_file, violation_delete_days, violatio
         user_id: 用户ID，用于更新数据库
         last_check_timestamp: 最后检查时间戳，避免重复处理
         batch_info: 批次信息（用于日志）
+        process_interval: 处理间隔（秒）
     
     Returns:
         dict: 包含统计结果的字典
@@ -1079,7 +1083,14 @@ async def _process_violation_batch(account_file, violation_delete_days, violatio
                     tencent_logger.warning(f"[违规处理-{batch_info}] ❌ 满足删除条件（{read_count} < {violation_delete_views}）")
                     # 执行删除（使用 exportId）
                     success,errmsg = await delete_violation_video(export_id, account_file, sessionid, wxuin)
-                    await asyncio.sleep(1.5)  # 避免请求过快
+                    
+                    # 使用配置的处理间隔
+                    if process_interval > 0:
+                        tencent_logger.info(f"[违规处理-{batch_info}] 等待处理间隔 {process_interval} 秒...")
+                        await asyncio.sleep(process_interval)
+                    else:
+                        await asyncio.sleep(1.5)  # 默认间隔，避免请求过快
+                    
                     if success:
                         delete_count += 1
                         tencent_logger.info(f"[违规处理-{batch_info}] 删除成功")
@@ -1105,7 +1116,14 @@ async def _process_violation_batch(account_file, violation_delete_days, violatio
                             wxuin=wxuin,
                             collection_id=collection_id if collection_id else None
                         )
-                        await asyncio.sleep(1.5)  # 避免请求过快
+                        
+                        # 使用配置的处理间隔
+                        if process_interval > 0:
+                            tencent_logger.info(f"[违规处理-{batch_info}] 等待处理间隔 {process_interval} 秒...")
+                            await asyncio.sleep(process_interval)
+                        else:
+                            await asyncio.sleep(1.5)  # 默认间隔，避免请求过快
+                        
                         if success:
                             hide_count += 1
                             tencent_logger.info(f"[违规处理-{batch_info}] 隐藏成功")
