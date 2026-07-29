@@ -566,7 +566,9 @@ async def delete_videos_by_search_api(account_file, minutes_ago, max_views, vide
         continue_flag = True
         delete_success_count = 0
         delete_fail_count = 0
+        skip_count = 0  # ✅ 添加跳过计数
         page_count = 0
+        rate_limited = False  # ✅ 添加频率限制标志位
         
         while continue_flag:
             page_count += 1
@@ -659,30 +661,36 @@ async def delete_videos_by_search_api(account_file, minutes_ago, max_views, vide
                 
                 # 检查是否符合删除条件
                 if drama_name_match and minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and read_count < max_views:
-                    tencent_logger.info(f"[手动删除-API] => 符合删除条件，立即删除")
+                    tencent_logger.info(f"[手动删除-API] => 符合删除条件")
                     
-                    # 立即执行删除
-                    success, errmsg = await delete_violation_video(export_id, account_file, sessionid, wxuin)
-                    
-                    # 使用配置的处理间隔
-                    if process_interval > 0:
-                        tencent_logger.info(f"[手动删除-API] 等待处理间隔 {process_interval} 秒...")
-                        await asyncio.sleep(process_interval)
+                    # ✅ 检查是否已经遇到删除频率限制
+                    if rate_limited:
+                        tencent_logger.warning(f"[手动删除-API] ⚠️ 已遇到删除频率限制，跳过删除操作")
+                        skip_count += 1
                     else:
-                        await asyncio.sleep(1)  # 默认间隔
-                    
-                    if success:
-                        delete_success_count += 1
-                        tencent_logger.info(f"[手动删除-API] ✅ 删除成功 (已删除: {delete_success_count})")
-                    else:
-                        # 检查是否是删除频率限制
-                        if errmsg == '暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
-                            tencent_logger.error(f"[手动删除-API] ⚠️ 遇到删除频率限制，停止后续处理")
-                            tencent_logger.info(f"[手动删除-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个（遇到频率限制）")
-                            return  # 立即结束函数
+                        # 立即执行删除
+                        success, errmsg = await delete_violation_video(export_id, account_file, sessionid, wxuin)
                         
-                        delete_fail_count += 1
-                        tencent_logger.error(f"[手动删除-API] ❌ 删除失败 (失败: {delete_fail_count}): {errmsg}")
+                        # 使用配置的处理间隔
+                        if process_interval > 0:
+                            tencent_logger.info(f"[手动删除-API] 等待处理间隔 {process_interval} 秒...")
+                            await asyncio.sleep(process_interval)
+                        else:
+                            await asyncio.sleep(1)  # 默认间隔
+                        
+                        if success:
+                            delete_success_count += 1
+                            tencent_logger.info(f"[手动删除-API] ✅ 删除成功 (已删除: {delete_success_count})")
+                        else:
+                            # 检查是否是删除频率限制
+                            if errmsg == '暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                                tencent_logger.error(f"[手动删除-API] ⚠️ 遇到删除频率限制，后续不再执行删除操作")
+                                rate_limited = True  # ✅ 设置标志位
+                                skip_count += 1
+                                # ✅ 不再 return，继续处理列表
+                            else:
+                                delete_fail_count += 1
+                                tencent_logger.error(f"[手动删除-API] ❌ 删除失败 (失败: {delete_fail_count}): {errmsg}")
                 else:
                     tencent_logger.info(f"[手动删除-API] => 不符合删除条件")
             
@@ -694,7 +702,11 @@ async def delete_videos_by_search_api(account_file, minutes_ago, max_views, vide
             # 翻页间隔
             await asyncio.sleep(0.5)
         
-        tencent_logger.info(f"[手动删除-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
+        # ✅ 输出最终统计（包含跳过的）
+        if rate_limited:
+            tencent_logger.info(f"[手动删除-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个，跳过 {skip_count} 个（遇到频率限制）")
+        else:
+            tencent_logger.info(f"[手动删除-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
         
     except Exception as e:
         tencent_logger.exception(f"[手动删除-API] 删除视频时出错：{str(e)}")

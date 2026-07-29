@@ -1088,25 +1088,33 @@ async def _process_violation_batch(account_file, violation_delete_days, violatio
                 # 根据真实播放量判断并执行操作
                 if read_count < violation_delete_views:
                     tencent_logger.warning(f"[违规处理-{batch_info}] ❌ 满足删除条件（{read_count} < {violation_delete_views}）")
-                    # 执行删除（使用 exportId）
-                    success,errmsg = await delete_violation_video(export_id, account_file, sessionid, wxuin)
                     
-                    # 使用配置的处理间隔
-                    if process_interval > 0:
-                        tencent_logger.info(f"[违规处理-{batch_info}] 等待处理间隔 {process_interval} 秒...")
-                        await asyncio.sleep(process_interval)
+                    # ✅ 检查是否已经遇到删除频率限制
+                    if rate_limited:
+                        tencent_logger.warning(f"[违规处理-{batch_info}] ⚠️ 已遇到删除频率限制，跳过删除操作")
+                        skip_count += 1
                     else:
-                        await asyncio.sleep(1.5)  # 默认间隔，避免请求过快
-                    
-                    if success:
-                        delete_count += 1
-                        tencent_logger.info(f"[违规处理-{batch_info}] 删除成功")
-                    else:
-                        if errmsg =='暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
-                            tencent_logger.error(f"[违规处理-{batch_info}] ⚠️ 遇到删除频率限制，停止后续处理")
-                            rate_limited = True
-                            break
-                        tencent_logger.error(f"[违规处理-{batch_info}] 删除失败")
+                        # 执行删除（使用 exportId）
+                        success,errmsg = await delete_violation_video(export_id, account_file, sessionid, wxuin)
+                        
+                        # 使用配置的处理间隔
+                        if process_interval > 0:
+                            tencent_logger.info(f"[违规处理-{batch_info}] 等待处理间隔 {process_interval} 秒...")
+                            await asyncio.sleep(process_interval)
+                        else:
+                            await asyncio.sleep(1.5)  # 默认间隔，避免请求过快
+                        
+                        if success:
+                            delete_count += 1
+                            tencent_logger.info(f"[违规处理-{batch_info}] 删除成功")
+                        else:
+                            if errmsg =='暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                                tencent_logger.error(f"[违规处理-{batch_info}] ⚠️ 遇到删除频率限制，后续不再执行删除操作，但继续处理隐藏")
+                                rate_limited = True
+                                skip_count += 1
+                                # ✅ 不再 break，继续处理后续的隐藏操作
+                            else:
+                                tencent_logger.error(f"[违规处理-{batch_info}] 删除失败: {errmsg}")
                         
                 elif read_count >= violation_hide_views:
                     # 检查是否已经隐藏

@@ -1414,6 +1414,10 @@ class TencentVideo(object):
             current_page = 1
             delete_success_count = 0
             delete_fail_count = 0
+            skip_count = 0  # ✅ 添加跳过计数
+            rate_limited = False  # ✅ 添加频率限制标志位
+            first_video_timestamp = None  # ✅ 记录第一页第一条视频的时间戳
+            last_successful_timestamp = None  # ✅ 记录最后一次成功处理的视频时间戳
             
             while True:
                 data = {
@@ -1457,9 +1461,9 @@ class TencentVideo(object):
                 
                 tencent_logger.info(f"[删除流程-API] 第{current_page}页: 获取 {len(video_list)} 个视频")
                 
-                # 记录本页第一条视频的发布时间（用于更新时间戳）
-                first_video_timestamp = None
-                if current_page == 1 and video_list:
+                # ✅ 记录本页第一条视频的发布时间（用于更新时间戳）
+                # 如果是第一页且还没有记录，则记录第一条
+                if current_page == 1 and video_list and first_video_timestamp is None:
                     first_video_timestamp = video_list[0].get('createTime', 0)
                 
                 # 检查符合条件的视频并立即删除
@@ -1492,40 +1496,41 @@ class TencentVideo(object):
                     
                     # 检查是否符合删除条件（与页面操作逻辑一致）
                     if minutes_ago is not None and time_diff >= minutes_ago and max_views is not None and read_count < max_views:
-                        tencent_logger.info(f"[删除流程-API] => 符合删除条件，立即删除")
+                        tencent_logger.info(f"[删除流程-API] => 符合删除条件")
                         
-                        # 立即执行删除
-                        success,errmsg = await delete_violation_video(export_id, self.account_file, sessionid, wxuin)
-                        
-                        # 使用配置的处理间隔
-                        process_interval = self.info.get("violation_process_interval", 0)
-                        if process_interval > 0:
-                            tencent_logger.info(f"[删除流程-API] 等待处理间隔 {process_interval} 秒...")
-                            await asyncio.sleep(process_interval)
+                        # ✅ 检查是否已经遇到删除频率限制
+                        if rate_limited:
+                            tencent_logger.warning(f"[删除流程-API] ⚠️ 已遇到删除频率限制，跳过删除操作")
+                            skip_count += 1
                         else:
-                            await asyncio.sleep(1.5)  # 默认间隔，避免请求过快
-                        
-                        if success:
-                            delete_success_count += 1
-                            tencent_logger.info(f"[删除流程-API] ✅ 删除成功 (已删除: {delete_success_count})")
-                        else:
-                            # 检查是否是删除频率限制
-                            if errmsg == '暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
-                                tencent_logger.error(f"[删除流程-API] ⚠️ 遇到删除频率限制，停止后续处理")
-                                tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个（遇到频率限制）")
-                                # 更新用户时间戳后退出
-                                if user_id and first_video_timestamp:
-                                    try:
-                                        from db_manager import get_db_manager
-                                        db_manager = get_db_manager()
-                                        db_manager.update_user(user_id, {'last_delete_video_timestamp': first_video_timestamp})
-                                        tencent_logger.info(f"[删除流程-API] ✅ 已更新最后删除视频时间戳: {first_video_timestamp}")
-                                    except:
-                                        pass
-                                return  # 立即结束函数
+                            # 立即执行删除
+                            success,errmsg = await delete_violation_video(export_id, self.account_file, sessionid, wxuin)
                             
-                            delete_fail_count += 1
-                            tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count}): {errmsg}")
+                            # 使用配置的处理间隔
+                            process_interval = self.info.get("violation_process_interval", 0)
+                            if process_interval > 0:
+                                tencent_logger.info(f"[删除流程-API] 等待处理间隔 {process_interval} 秒...")
+                                await asyncio.sleep(process_interval)
+                            else:
+                                await asyncio.sleep(1.5)  # 默认间隔，避免请求过快
+                            
+                            if success:
+                                delete_success_count += 1
+                                # ✅ 记录最后一次成功处理的视频时间戳
+                                last_successful_timestamp = create_time
+                                tencent_logger.info(f"[删除流程-API] ✅ 删除成功 (已删除: {delete_success_count})")
+                            else:
+                                # 检查是否是删除频率限制
+                                if errmsg == '暂无法删除，你今日删除太频繁，如需继续操作可登录管理员账号重试':
+                                    tencent_logger.error(f"[删除流程-API] ⚠️ 遇到删除频率限制，后续不再执行删除操作")
+                                    rate_limited = True  # ✅ 设置标志位
+                                    # ✅ 保存出问题的视频时间戳（而不是第一条视频的时间戳）
+                                    last_successful_timestamp = create_time
+                                    skip_count += 1
+                                    # ✅ 不再 return，继续处理列表
+                                else:
+                                    delete_fail_count += 1
+                                    tencent_logger.error(f"[删除流程-API] ❌ 删除失败 (失败: {delete_fail_count}): {errmsg}")
                         
                         should_continue = True
                     else:
@@ -1549,18 +1554,26 @@ class TencentVideo(object):
                 # ✅ 使用 asyncio.sleep 替代 time.sleep
                 await asyncio.sleep(0.5)
             
-            tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
+            # ✅ 输出最终统计（包含跳过的）
+            if rate_limited:
+                tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个，跳过 {skip_count} 个（遇到频率限制）")
+            else:
+                tencent_logger.info(f"[删除流程-API] 删除完成：成功 {delete_success_count} 个，失败 {delete_fail_count} 个")
             
-            # 更新用户的最后删除视频时间戳（使用第一页第一条视频的发布时间）
-            if user_id and first_video_timestamp:
+            # ✅ 更新用户的最后删除视频时间戳
+            # 优先使用 last_successful_timestamp（最后一次成功处理或遇到问题的视频时间）
+            # 如果没有处理任何视频，则使用 first_video_timestamp（第一页第一条视频）
+            timestamp_to_save = last_successful_timestamp if last_successful_timestamp else first_video_timestamp
+            
+            if user_id and timestamp_to_save:
                 try:
                     from db_manager import get_db_manager
                     
                     db_manager = get_db_manager()
                     
                     # 更新最后删除时的视频时间戳
-                    db_manager.update_user(user_id, {'last_delete_video_timestamp': first_video_timestamp})
-                    tencent_logger.info(f"[删除流程-API] ✅ 已更新最后删除视频时间戳: {first_video_timestamp} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(first_video_timestamp))})")
+                    db_manager.update_user(user_id, {'last_delete_video_timestamp': timestamp_to_save})
+                    tencent_logger.info(f"[删除流程-API] ✅ 已更新最后删除视频时间戳: {timestamp_to_save} ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp_to_save))})")
                 except Exception as e:
                     tencent_logger.warning(f"[删除流程-API] 更新最后删除时间戳失败: {str(e)}")
             
