@@ -114,7 +114,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                     else:
                         # 原有的删除逻辑
                         # 获取发布时间
-                        post_time_element = item.locator('.post-time')
+                        post_time_element = item.locator('.post-time .time-label')
                         if await post_time_element.count() > 0:
                             post_time_str = await post_time_element.text_content()
                             # 解析发布时间
