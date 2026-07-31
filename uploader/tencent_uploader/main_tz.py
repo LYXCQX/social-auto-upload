@@ -21,7 +21,7 @@ def remove_punctuation(text: str) -> str:
     return re.sub(r'[^\w]', '', text, flags=re.UNICODE)
 
 
-async def delete_video(local_executable_path, account_file, minutes_ago, max_views, video_title=None):
+async def delete_video(local_executable_path, account_file, minutes_ago, max_views, video_title=None, process_interval=0):
     async with async_playwright() as playwright:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
         browser = await playwright.chromium.launch(headless=False, executable_path=local_executable_path)
@@ -31,13 +31,13 @@ async def delete_video(local_executable_path, account_file, minutes_ago, max_vie
         # 创建一个新的页面
         page = await context.new_page()
         await page.goto("https://channels.weixin.qq.com/platform/post/list",timeout=300000)
-        await delete_videos_by_conditions(page, minutes_ago=int(minutes_ago), max_views=int(max_views), video_title=video_title)
+        await delete_videos_by_conditions(page, minutes_ago=int(minutes_ago), max_views=int(max_views), video_title=video_title, process_interval=process_interval)
         # 关闭浏览器上下文和浏览器实例
         await context.close()
         await browser.close()
 
 
-async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,page_index=0,video_title=None,only_delete_fail=False):
+async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,page_index=0,video_title=None,only_delete_fail=False,process_interval=0):
     """
     根据时间间隔和播放量条件删除视频
     :param page: 页面对象
@@ -46,6 +46,7 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
     :param page_index: 处理到第几页停止（0表示全部处理）
     :param video_title: 视频标题前缀匹配
     :param only_delete_fail: 仅删除错误视频（.post-processed-fail）
+    :param process_interval: 处理间隔（秒）
     :return:
     """
     if not only_delete_fail and not minutes_ago and not max_views:
@@ -59,6 +60,8 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
             tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 剧名为'{video_title}' 且 页码为{page_index}")
         else:
             tencent_logger.info(f"[删除流程] 开始删除视频，条件：{minutes_ago}分钟前 且 播放量少于{max_views} 且 页码为{page_index}")
+    
+    tencent_logger.info(f"[删除流程] 处理间隔: {process_interval}秒")
     try:
         start_time = time.time()
         timeout = 864000  # 5分钟超时
@@ -174,7 +177,14 @@ async def delete_videos_by_conditions(page, minutes_ago=None, max_views=None,pag
                             await delete_button.locator('..').locator('.opr-item').evaluate('el => el.click()')
                             await page.click(':text-is("确定"):visible')
                             deleted_count += 1
-                            await asyncio.sleep(2)
+                            
+                            # 使用配置的处理间隔
+                            if process_interval > 0:
+                                tencent_logger.info(f"[删除流程] 等待处理间隔 {process_interval} 秒...")
+                                await asyncio.sleep(process_interval)
+                            else:
+                                await asyncio.sleep(2)
+                            
                             # 删除后重新获取视频列表
                             feed_items = await page.locator('.post-feed-item').all()
                             # 不增加索引，因为当前项已被删除，下一项会变成当前索引位置

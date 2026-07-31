@@ -1126,7 +1126,7 @@ class TencentVideo(object):
                 fail_video_count = await page.locator('.post-processed-fail').count()
                 if fail_video_count > 0:
                     tencent_logger.warning(f'[错误视频处理] 发现 {fail_video_count} 个错误视频，准备删除')
-                    await delete_videos_by_conditions(page, page_index=5, only_delete_fail=True)
+                    await delete_videos_by_conditions(page, page_index=5, only_delete_fail=True, process_interval=self.info.get("violation_process_interval", 0))
                     tencent_logger.success('[错误视频处理] 错误视频删除完毕')
                 else:
                     tencent_logger.info('[错误视频处理] 未发现错误视频')
@@ -1162,7 +1162,8 @@ class TencentVideo(object):
                     minutes_ago=self.info.get("delete_time_threshold", 1440), 
                     max_views=self.info.get("delete_play_threshold", 100),
                     page_index=50,
-                    video_title=None)  # 自动删除时不按剧名过滤
+                    video_title=None,  # 自动删除时不按剧名过滤
+                    process_interval=self.info.get("violation_process_interval", 0))
         
         # 检查并处理违规视频（异步执行，不阻塞主流程）
         if self.info and self.info.get("delete_violation", False):
@@ -1315,7 +1316,7 @@ class TencentVideo(object):
                             continue
                     if all_have_effective_time:
                         tencent_logger.info(f"  [视频号上传] {self.file_path} [删除流程] 所有视频项都包含effective-time，调用批量删除方法")
-                        await delete_videos_by_conditions(page, 0, 10, page_index=5, video_title='waitdel-')
+                        await delete_videos_by_conditions(page, 0, 10, page_index=5, video_title='waitdel-', process_interval=self.info.get("violation_process_interval", 0))
                     # 如果没有找到匹配的视频，说明删除完成
                     if not found_video:
                         if is_first_time:
