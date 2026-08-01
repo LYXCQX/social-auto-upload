@@ -8,11 +8,6 @@ from social_auto_upload.utils.base_up_util import dispatch_upload
 import os
 import asyncio
 from dotenv import load_dotenv
-import json
-
-from sympy import true
-
-from log import logger
 from social_auto_upload.conf import LOCAL_CHROME_PATH
 from social_auto_upload.utils.base_social_media import set_init_script, SOCIAL_MEDIA_TOUTIAO
 from social_auto_upload.utils.file_util import get_account_file
