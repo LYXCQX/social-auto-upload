@@ -163,7 +163,7 @@ async def get_post_list_by_date_with_early_stop_async(session, headers, cookies,
     total_seconds = end_time - start_time
     total_days = total_seconds / (24 * 60 * 60)
     batch_seconds = batch_days * 24 * 60 * 60
-    num_batches = int((total_seconds + batch_seconds - 1) / batch_seconds)
+    num_batches = max(1,int((total_seconds + batch_seconds - 1) / batch_seconds))
     
     tencent_logger.info(f"[违规处理] 开始分批查询视频列表")
     tencent_logger.info(f"[违规处理] 总时间跨度: {total_days:.1f}天，分为 {num_batches} 批，每批 {batch_days} 天")
